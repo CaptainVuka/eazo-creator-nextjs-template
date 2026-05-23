@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>海与船</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..700&family=Young+Serif&display=swap" />
+<style>
+  :root {
+    --paper: oklch(95% 0.015 80);
+    --paper-dim: oklch(85% 0.012 80);
+    --ink: oklch(20% 0.02 80);
+    --ink-soft: oklch(35% 0.02 80);
+    --rust: oklch(58% 0.13 30);
+  }
+  html, body {
+    margin: 0; padding: 0; overflow: hidden;
+    background: oklch(35% 0.06 200);
+    font-family: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+    color: var(--ink);
+  }
+  canvas { display: block; }
+
+  #compass {
+    position: fixed; top: 22px; left: 22px; width: 62px; height: 62px;
+    border: 1px solid color-mix(in oklch, var(--paper) 26%, transparent);
+    border-radius: 50%;
+    background: color-mix(in oklch, var(--ink) 32%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    pointer-events: none;
+  }
+  #compass::before {
+    content: 'N';
+    position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+    color: var(--paper); font-family: 'Young Serif', serif; font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+  #compass-needle {
+    position: absolute; top: 50%; left: 50%;
+    width: 2px; height: 24px;
+    background: var(--rust);
+    transform-origin: center bottom;
+    transform: translate(-50%, -100%) rotate(0deg);
+    border-radius: 1px;
+  }
+  #compass-needle::after {
+    content: ''; position: absolute; top: -4px; left: 50%;
+    width: 6px; height: 6px; transform: translateX(-50%) rotate(45deg);
+    background: var(--rust);
+  }
+
+  #hint {
+    position: fixed; top: 22px; right: 22px;
+    background: color-mix(in oklch, var(--ink) 30%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 11px 16px;
+    border-radius: 3px;
+    color: var(--paper);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    line-height: 1.8;
+    border: 1px solid color-mix(in oklch, var(--paper) 14%, transparent);
+    transition: opacity 1.2s ease-out;
+  }
+  #hint.faded { opacity: 0.15; }
+  #hint b {
+    font-weight: 400;
+    font-family: 'Young Serif', serif;
+    font-style: italic;
+    color: oklch(85% 0.08 60);
+    padding: 0 2px;
+  }
+
+  #island-name {
+    position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
+    font-family: 'Young Serif', serif;
+    font-size: clamp(22px, 3vw, 30px);
+    color: var(--paper);
+    letter-spacing: 0.02em;
+    opacity: 0;
+    transition: opacity 0.9s ease-out;
+    text-shadow: 0 1px 24px oklch(20% 0.04 200 / 0.7);
+    pointer-events: none;
+    text-align: center;
+    line-height: 1.05;
+  }
+  #island-name small {
+    display: block; margin-top: 8px;
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: 10px; font-weight: 300;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    opacity: 0.62;
+    color: oklch(92% 0.02 60);
+  }
+
+  /* Talk prompt — small badge that says "Press Enter to speak" when in range */
+  #talk-prompt {
+    position: fixed; bottom: 64px; left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: color-mix(in oklch, var(--ink) 36%, transparent);
+    color: var(--paper);
+    padding: 9px 16px 9px 14px;
+    border-radius: 100px;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+    border: 1px solid color-mix(in oklch, var(--paper) 20%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+    pointer-events: auto;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: 0 12px 30px oklch(20% 0.04 200 / 0.32);
+  }
+  #talk-prompt.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  #talk-prompt:hover { background: color-mix(in oklch, var(--ink) 46%, transparent); }
+  #talk-prompt kbd {
+    display: inline-block;
+    background: color-mix(in oklch, var(--paper) 20%, transparent);
+    color: var(--paper);
+    font-family: ui-sans-serif, system-ui;
+    font-size: 10.5px; font-weight: 500;
+    padding: 1px 7px;
+    border-radius: 4px;
+    margin-right: 8px;
+    border: 1px solid color-mix(in oklch, var(--paper) 24%, transparent);
+  }
+  #talk-prompt strong {
+    font-family: 'Young Serif', serif;
+    font-weight: 400;
+    font-style: italic;
+    color: oklch(92% 0.06 70);
+  }
+
+  /* Encounter card — shown after pressing Enter */
+  #encounter {
+    position: fixed; bottom: 56px; left: 50%;
+    transform: translateX(-50%) translateY(16px);
+    max-width: min(460px, 86vw);
+    padding: 22px 28px 20px;
+    background: color-mix(in oklch, var(--paper) 95%, transparent);
+    color: var(--ink);
+    border: 1px solid color-mix(in oklch, var(--ink) 18%, transparent);
+    border-radius: 3px;
+    box-shadow: 0 30px 90px oklch(20% 0.04 200 / 0.45);
+    opacity: 0;
+    transition: opacity 0.55s ease-out, transform 0.55s ease-out;
+    pointer-events: auto;
+    text-align: left;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    cursor: pointer;
+  }
+  #encounter.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  #encounter .enc-name {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: 10.5px; font-weight: 400;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+  }
+  #encounter .enc-line {
+    font-family: 'Young Serif', serif;
+    font-size: clamp(16px, 1.85vw, 20px);
+    font-style: italic;
+    line-height: 1.5;
+    color: var(--ink);
+    margin: 0 0 14px 0;
+  }
+  #encounter .enc-source {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: 9.5px; font-weight: 300;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: oklch(45% 0.04 60);
+  }
+  #encounter .enc-source::before { content: '— '; }
+  #encounter .enc-dismiss {
+    margin-top: 12px;
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: 9.5px; font-weight: 300;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: oklch(55% 0.02 60);
+    text-align: right;
+  }
+
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, oklch(20% 0.04 200 / 0.32) 100%);
+    mix-blend-mode: multiply;
+  }
+  #grain {
+    position: fixed; inset: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/></svg>");
+    opacity: 0.045;
+    mix-blend-mode: overlay;
+  }
+
+  #audio-toggle {
+    position: fixed; bottom: 24px; right: 24px;
+    width: 44px; height: 44px;
+    border: 1px solid color-mix(in oklch, var(--paper) 22%, transparent);
+    background: color-mix(in oklch, var(--ink) 30%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--paper);
+    transition: opacity 0.4s, transform 0.2s;
+    opacity: 0.65;
+    padding: 0;
+  }
+  #audio-toggle:hover { opacity: 1; transform: scale(1.05); }
+  #audio-toggle.muted { opacity: 0.35; }
+  #audio-toggle svg { width: 18px; height: 18px; }
+  #audio-toggle .strike { display: none; }
+  #audio-toggle.muted .strike { display: block; }
+  #audio-toggle.unavailable { display: none; }
+
+  #stick {
+    display: none; position: fixed; bottom: 28px; left: 28px;
+    width: 120px; height: 120px;
+    background: color-mix(in oklch, var(--paper) 10%, transparent);
+    border: 1px solid color-mix(in oklch, var(--paper) 22%, transparent);
+    border-radius: 50%; touch-action: none;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  #stick > div {
+    position: absolute; top: 50%; left: 50%;
+    width: 50px; height: 50px;
+    transform: translate(-50%, -50%);
+    background: color-mix(in oklch, var(--paper) 24%, transparent);
+    border-radius: 50%;
+  }
+  @media (pointer: coarse) { #stick { display: block; } }
+</style>
+</head>
+<body>
+<div id="compass"><div id="compass-needle"></div></div>
+<div id="hint">扬帆 <b>W</b> · 转舵 <b>A D</b> · 收帆 <b>S</b> · 交谈 <b>↵</b></div>
+<div id="island-name"></div>
+<div id="talk-prompt"></div>
+<div id="encounter">
+  <div class="enc-name"></div>
+  <p class="enc-line"></p>
+  <div class="enc-source"></div>
+  <div class="enc-dismiss">按 ↵ 或点击关闭</div>
+</div>
+<div id="vignette"></div>
+<div id="grain"></div>
+<div id="stick"><div></div></div>
+<button id="audio-toggle" class="unavailable muted" aria-label="Toggle music">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+    <path d="M15.5 8.5a5 5 0 010 7"/>
+    <path d="M18.5 5.5a9 9 0 010 13"/>
+    <line x1="22" y1="2" x2="2" y2="22" class="strike" stroke-width="1.8"/>
+  </svg>
+</button>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const P = {
+  seaDeep:    new THREE.Color(0x1f3a44),
+  seaShallow: new THREE.Color(0x6ba49f),
+  seaFoam:    new THREE.Color(0xf2e9d8),
+  skyTop:     new THREE.Color(0x4a6680),
+  skyHorizon: new THREE.Color(0xeccfae),
+  sunWarm:    new THREE.Color(0xf6c181),
+  paper:      new THREE.Color(0xf2e9d8),
+  ink:        new THREE.Color(0x2a2520),
+  rust:       new THREE.Color(0xb8593a),
+  hull:       new THREE.Color(0xebe2d0),
+  wood:       new THREE.Color(0x5a3f2a),
+  sand:       new THREE.Color(0xd4b896),
+  rock:       new THREE.Color(0x3a3530),
+  grove:      new THREE.Color(0x6e8a52),
+  lhRed:      new THREE.Color(0xc24f3f),
+};
+const SUN_DIR = new THREE.Vector3(0.6, 0.32, -0.74).normalize();
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(P.skyHorizon, 110, 320);
+const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.5, 900);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// SKY
+{
+  const geo = new THREE.SphereGeometry(500, 32, 16);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTop: { value: P.skyTop }, uHorizon: { value: P.skyHorizon }, uSun: { value: P.sunWarm }, uSunDir: { value: SUN_DIR } },
+    vertexShader: `varying vec3 vDir; void main() { vDir = normalize((modelMatrix * vec4(position, 1.0)).xyz); gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uTop; uniform vec3 uHorizon; uniform vec3 uSun; uniform vec3 uSunDir; varying vec3 vDir;
+      void main() {
+        float h = clamp(vDir.y * 0.85 + 0.15, 0.0, 1.0);
+        vec3 col = mix(uHorizon, uTop, smoothstep(0.0, 0.65, h));
+        float sunDot = max(0.0, dot(vDir, uSunDir));
+        col += uSun * (pow(sunDot, 80.0) * 1.5);
+        col += uSun * (pow(sunDot, 4.0) * 0.18);
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+    side: THREE.BackSide, depthWrite: false,
+  });
+  scene.add(new THREE.Mesh(geo, mat));
+}
+
+const sun = new THREE.DirectionalLight(0xffe1b0, 1.35);
+sun.position.copy(SUN_DIR).multiplyScalar(120);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -90; sun.shadow.camera.right = 90;
+sun.shadow.camera.top = 90; sun.shadow.camera.bottom = -90;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 300;
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xb8ccdc, 0x4a3a2a, 0.55));
+
+const waterUniforms = {
+  uTime: { value: 0 }, uDeep: { value: P.seaDeep }, uShallow: { value: P.seaShallow },
+  uFoam: { value: P.seaFoam }, uSunDir: { value: SUN_DIR }, uHorizonCol: { value: P.skyHorizon },
+};
+const waterMat = new THREE.ShaderMaterial({
+  uniforms: waterUniforms,
+  vertexShader: `
+    uniform float uTime; varying vec3 vWorldPos; varying float vWave; varying vec3 vNormal;
+    void main() {
+      vec3 pos = position;
+      float w = 0.0;
+      w += sin(pos.x * 0.085 + uTime * 0.55) * 0.42;
+      w += sin(pos.y * 0.062 - uTime * 0.48) * 0.38;
+      w += sin((pos.x + pos.y) * 0.14 + uTime * 1.05) * 0.16;
+      pos.z = w; vWave = w;
+      float dx = cos(pos.x * 0.085 + uTime * 0.55) * 0.085 * 0.42
+               + cos((pos.x + pos.y) * 0.14 + uTime * 1.05) * 0.14 * 0.16;
+      float dy = -cos(pos.y * 0.062 - uTime * 0.48) * 0.062 * 0.38
+               + cos((pos.x + pos.y) * 0.14 + uTime * 1.05) * 0.14 * 0.16;
+      vNormal = normalize(vec3(-dx, -dy, 1.0));
+      vec4 wp = modelMatrix * vec4(pos, 1.0);
+      vWorldPos = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }`,
+  fragmentShader: `
+    uniform vec3 uDeep; uniform vec3 uShallow; uniform vec3 uFoam;
+    uniform vec3 uSunDir; uniform vec3 uHorizonCol;
+    varying vec3 vWorldPos; varying float vWave; varying vec3 vNormal;
+    void main() {
+      float depthMix = smoothstep(-0.4, 0.55, vWave);
+      vec3 base = mix(uDeep, uShallow, depthMix);
+      float crest = smoothstep(0.55, 0.92, vWave);
+      base = mix(base, uFoam, crest * 0.42);
+      vec3 viewDir = normalize(cameraPosition - vWorldPos);
+      vec3 worldNormal = normalize(vec3(vNormal.x, vNormal.z, -vNormal.y));
+      vec3 H = normalize(uSunDir + viewDir);
+      float spec = pow(max(0.0, dot(worldNormal, H)), 64.0);
+      base += vec3(1.0, 0.88, 0.72) * spec * 0.55;
+      float dist = length(vWorldPos.xz - cameraPosition.xz);
+      float distFog = smoothstep(120.0, 280.0, dist);
+      base = mix(base, uHorizonCol, distFog * 0.65);
+      gl_FragColor = vec4(base, 1.0);
+    }`,
+});
+const water = new THREE.Mesh(new THREE.PlaneGeometry(800, 800, 220, 220), waterMat);
+water.rotation.x = -Math.PI / 2;
+scene.add(water);
+
+function sampleWave(wx, wz, t) {
+  const lx = wx, ly = -wz;
+  let w = 0;
+  w += Math.sin(lx * 0.085 + t * 0.55) * 0.42;
+  w += Math.sin(ly * 0.062 - t * 0.48) * 0.38;
+  w += Math.sin((lx + ly) * 0.14 + t * 1.05) * 0.16;
+  return w;
+}
+
+// === BOAT ===
+const boat = new THREE.Group();
+{
+  const hullShape = new THREE.Shape();
+  hullShape.moveTo(0, -1.7);
+  hullShape.bezierCurveTo(0.55, -1.0, 0.65, 0.6, 0.42, 1.55);
+  hullShape.lineTo(-0.42, 1.55);
+  hullShape.bezierCurveTo(-0.65, 0.6, -0.55, -1.0, 0, -1.7);
+  const hullGeo = new THREE.ExtrudeGeometry(hullShape, {
+    depth: 0.55, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.07, bevelSegments: 3, steps: 1,
+  });
+  hullGeo.center();
+  hullGeo.rotateX(Math.PI / 2);
+  hullGeo.rotateY(Math.PI);
+  const hull = new THREE.Mesh(hullGeo, new THREE.MeshStandardMaterial({
+    color: P.hull, roughness: 0.78, metalness: 0,
+  }));
+  hull.castShadow = true; hull.position.y = 0.12;
+  boat.add(hull);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 2.0),
+    new THREE.MeshStandardMaterial({ color: P.wood, roughness: 0.88 }));
+  deck.position.y = 0.32; deck.castShadow = true; boat.add(deck);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 3.3, 6),
+    new THREE.MeshStandardMaterial({ color: P.wood, roughness: 0.9 }));
+  mast.position.set(0, 1.85, 0.1); mast.castShadow = true; boat.add(mast);
+  const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 1.5, 6),
+    new THREE.MeshStandardMaterial({ color: P.wood, roughness: 0.9 }));
+  boom.position.set(0, 0.55, -0.55); boom.rotation.x = Math.PI / 2;
+  boom.castShadow = true; boat.add(boom);
+  const sailShape = new THREE.Shape();
+  sailShape.moveTo(0, 0);
+  sailShape.lineTo(0, 3.1);
+  sailShape.quadraticCurveTo(0.9, 1.4, 1.5, 0);
+  sailShape.lineTo(0, 0);
+  const sailGeo = new THREE.ShapeGeometry(sailShape, 16);
+  const sailPos = sailGeo.attributes.position;
+  for (let i = 0; i < sailPos.count; i++) {
+    const x = sailPos.getX(i), y = sailPos.getY(i);
+    const bulge = Math.sin((y / 3.1) * Math.PI) * Math.min(1, x / 1.5) * 0.18;
+    sailPos.setZ(i, bulge);
+  }
+  sailGeo.computeVertexNormals();
+  const sail = new THREE.Mesh(sailGeo, new THREE.MeshStandardMaterial({
+    color: P.paper, roughness: 0.95, side: THREE.DoubleSide,
+  }));
+  sail.position.set(0, 0.55, -0.55);
+  sail.rotation.y = Math.PI / 2;
+  sail.castShadow = true;
+  boat.add(sail);
+  const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8),
+    new THREE.MeshStandardMaterial({ color: 0xffba78, emissive: 0xff8a40, emissiveIntensity: 1.6, roughness: 0.4 }));
+  lantern.position.set(0, 0.65, 1.55); boat.add(lantern);
+  const lanternLight = new THREE.PointLight(0xffa66a, 0.55, 8, 2);
+  lanternLight.position.set(0, 0.65, 1.55); boat.add(lanternLight);
+}
+scene.add(boat);
+
+// WAKE
+const WAKE_POOL = 70;
+const wakeMeshes = [];
+{
+  const geo = new THREE.PlaneGeometry(1, 1);
+  for (let i = 0; i < WAKE_POOL; i++) {
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: P.seaFoam, transparent: true, opacity: 0, depthWrite: false,
+    }));
+    m.rotation.x = -Math.PI / 2;
+    m.visible = false;
+    m.userData = { age: 0, life: 0, baseScale: 1 };
+    scene.add(m);
+    wakeMeshes.push(m);
+  }
+}
+let wakeIndex = 0;
+let wakeTimer = 0;
+function emitWake(heading, speed) {
+  if (Math.abs(speed) < 0.4) return;
+  const sternX = boat.position.x - Math.sin(heading) * 1.55;
+  const sternZ = boat.position.z - Math.cos(heading) * 1.55;
+  for (const side of [-1, 1]) {
+    const offX = side * Math.cos(heading) * 0.42;
+    const offZ = side * -Math.sin(heading) * 0.42;
+    const m = wakeMeshes[wakeIndex];
+    wakeIndex = (wakeIndex + 1) % WAKE_POOL;
+    m.position.set(sternX + offX, 0.05, sternZ + offZ);
+    m.visible = true;
+    m.userData.age = 0; m.userData.life = 2.6; m.userData.baseScale = 0.55;
+    m.scale.setScalar(0.55); m.material.opacity = 0.55;
+  }
+}
+function updateWake(dt) {
+  for (const m of wakeMeshes) {
+    if (!m.visible) continue;
+    m.userData.age += dt;
+    const t = m.userData.age / m.userData.life;
+    if (t >= 1) { m.visible = false; m.material.opacity = 0; continue; }
+    const s = m.userData.baseScale + t * 2.8;
+    m.scale.setScalar(s);
+    m.material.opacity = (1 - t) * 0.5;
+  }
+}
+
+// =================== CHIBI CHARACTER FACTORY ===================
+function makeChibi(opts = {}) {
+  const c = new THREE.Group();
+  const {
+    bodyColor = 0x6a6a6a,
+    skinColor = 0xd4b896,
+    headRadius = 0.34,
+    bodyHeight = 0.42,
+    bodyRadius = 0.32,
+    hair = null,
+    eyes = true,
+    eyeColor = 0x1a1812,
+    eyeSize = 0.045,
+    eyebrows = null,
+    cheeks = false,
+    beard = null,
+    mustache = null,
+    glasses = null,
+    hat = null,
+    transparent = false,
+    opacity = 1,
+    emissive = 0x000000,
+    emissiveIntensity = 0,
+  } = opts;
+
+  // Body (capsule)
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: bodyColor, roughness: 0.85,
+    transparent, opacity, emissive, emissiveIntensity,
+  });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(bodyRadius, bodyHeight, 6, 12), bodyMat);
+  body.position.y = 0;
+  body.castShadow = !transparent;
+  c.add(body);
+
+  // Head (big sphere)
+  const headMat = new THREE.MeshStandardMaterial({
+    color: skinColor, roughness: 0.8,
+    transparent, opacity,
+  });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(headRadius, 18, 14), headMat);
+  const headY = bodyHeight / 2 + bodyRadius - 0.02 + headRadius * 0.7;
+  head.position.y = headY;
+  head.castShadow = !transparent;
+  c.add(head);
+
+  // Eyes (forward = +Z)
+  if (eyes) {
+    const eyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
+    const eyeGeo = new THREE.SphereGeometry(eyeSize, 10, 8);
+    const ox = headRadius * 0.36;
+    const oz = headRadius * 0.92;
+    const oy = headY + headRadius * 0.05;
+    const eL = new THREE.Mesh(eyeGeo, eyeMat);
+    eL.position.set(-ox, oy, oz);
+    c.add(eL);
+    const eR = new THREE.Mesh(eyeGeo, eyeMat);
+    eR.position.set(ox, oy, oz);
+    c.add(eR);
+    c.userData.eyes = [eL, eR];
+
+    // Tiny eye shine (white dot)
+    const shineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const shineGeo = new THREE.SphereGeometry(eyeSize * 0.4, 6, 5);
+    const sL = new THREE.Mesh(shineGeo, shineMat);
+    sL.position.set(-ox + eyeSize * 0.4, oy + eyeSize * 0.3, oz + eyeSize * 0.5);
+    c.add(sL);
+    const sR = new THREE.Mesh(shineGeo, shineMat);
+    sR.position.set(ox + eyeSize * 0.4, oy + eyeSize * 0.3, oz + eyeSize * 0.5);
+    c.add(sR);
+  }
+  // Eyebrows
+  if (eyebrows) {
+    const ebMat = new THREE.MeshBasicMaterial({ color: eyebrows.color || 0x2a2520 });
+    const ebGeo = new THREE.BoxGeometry(0.09, 0.018, 0.02);
+    const bL = new THREE.Mesh(ebGeo, ebMat);
+    bL.position.set(-headRadius * 0.36, headY + headRadius * 0.22, headRadius * 0.94);
+    bL.rotation.z = eyebrows.tilt ?? -0.1;
+    c.add(bL);
+    const bR = new THREE.Mesh(ebGeo, ebMat);
+    bR.position.set(headRadius * 0.36, headY + headRadius * 0.22, headRadius * 0.94);
+    bR.rotation.z = -(eyebrows.tilt ?? -0.1);
+    c.add(bR);
+  }
+  // Cheeks (pink dots)
+  if (cheeks) {
+    const ckMat = new THREE.MeshBasicMaterial({ color: 0xf2a0a0, transparent: true, opacity: 0.55 });
+    const ckGeo = new THREE.SphereGeometry(headRadius * 0.16, 8, 6);
+    const cL = new THREE.Mesh(ckGeo, ckMat);
+    cL.position.set(-headRadius * 0.55, headY - headRadius * 0.15, headRadius * 0.78);
+    cL.scale.set(1, 0.7, 0.5);
+    c.add(cL);
+    const cR = new THREE.Mesh(ckGeo, ckMat);
+    cR.position.set(headRadius * 0.55, headY - headRadius * 0.15, headRadius * 0.78);
+    cR.scale.set(1, 0.7, 0.5);
+    c.add(cR);
+  }
+  // Hair
+  if (hair) {
+    const hairMat = new THREE.MeshStandardMaterial({ color: hair.color, roughness: 0.92 });
+    if (hair.style === 'topknot') {
+      const skull = new THREE.Mesh(
+        new THREE.SphereGeometry(headRadius * 1.02, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2.2),
+        hairMat
+      );
+      skull.position.set(0, headY - 0.01, 0);
+      c.add(skull);
+      const bun = new THREE.Mesh(new THREE.SphereGeometry(headRadius * 0.32, 12, 10), hairMat);
+      bun.position.set(0, headY + headRadius + 0.02, -headRadius * 0.1);
+      c.add(bun);
+    } else if (hair.style === 'cap' || hair.style === 'short') {
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(headRadius * 1.03, 18, 14, 0, Math.PI * 2, 0, Math.PI / 2.4),
+        hairMat
+      );
+      cap.position.set(0, headY - 0.02, 0);
+      c.add(cap);
+    } else if (hair.style === 'undercut') {
+      // top half darker
+      const top = new THREE.Mesh(
+        new THREE.SphereGeometry(headRadius * 1.04, 16, 12, 0, Math.PI * 2, 0, Math.PI / 3.2),
+        hairMat
+      );
+      top.position.set(0, headY + 0.02, -0.005);
+      c.add(top);
+    } else if (hair.style === 'messy') {
+      const skull = new THREE.Mesh(
+        new THREE.SphereGeometry(headRadius * 1.04, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2.5),
+        hairMat
+      );
+      skull.position.set(0, headY - 0.01, 0);
+      c.add(skull);
+      for (let i = 0; i < 5; i++) {
+        const tuft = new THREE.Mesh(
+          new THREE.SphereGeometry(headRadius * 0.22, 8, 6),
+          hairMat
+        );
+        const a = (i / 5) * Math.PI - Math.PI * 0.1;
+        tuft.position.set(
+          Math.sin(a) * headRadius * 0.7,
+          headY + headRadius * 0.78 + (i % 2) * 0.04,
+          -Math.cos(a) * headRadius * 0.5
+        );
+        tuft.scale.set(1, 0.55, 1);
+        tuft.rotation.z = (Math.random() - 0.5) * 0.4;
+        c.add(tuft);
+      }
+    } else if (hair.style === 'flat') {
+      // flat-top crew cut
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(headRadius * 1.02, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2.8),
+        hairMat
+      );
+      dome.position.set(0, headY - 0.02, 0);
+      c.add(dome);
+      const flat = new THREE.Mesh(
+        new THREE.CylinderGeometry(headRadius * 0.92, headRadius * 0.96, headRadius * 0.18, 16),
+        hairMat
+      );
+      flat.position.set(0, headY + headRadius * 0.78, 0);
+      c.add(flat);
+    } else if (hair.style === 'long') {
+      const skull = new THREE.Mesh(
+        new THREE.SphereGeometry(headRadius * 1.04, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2.3),
+        hairMat
+      );
+      skull.position.set(0, headY - 0.01, 0);
+      c.add(skull);
+      // backflow
+      const back = new THREE.Mesh(
+        new THREE.SphereGeometry(headRadius * 0.7, 12, 10, 0, Math.PI * 2, 0, Math.PI),
+        hairMat
+      );
+      back.position.set(0, headY - headRadius * 0.3, -headRadius * 0.6);
+      back.scale.set(1, 1.2, 0.7);
+      c.add(back);
+    }
+  }
+  // Beard
+  if (beard) {
+    const beardMat = new THREE.MeshStandardMaterial({ color: beard.color, roughness: 0.92 });
+    const b = new THREE.Mesh(
+      new THREE.SphereGeometry(headRadius * (beard.size || 0.58), 12, 10, 0, Math.PI * 2, 0, Math.PI / 1.8),
+      beardMat
+    );
+    b.position.set(0, headY - headRadius * 0.42, headRadius * 0.55);
+    b.scale.set(1.0, 0.9, 0.8);
+    c.add(b);
+  }
+  if (mustache) {
+    const mMat = new THREE.MeshStandardMaterial({ color: mustache.color, roughness: 0.92 });
+    const m = new THREE.Mesh(new THREE.SphereGeometry(headRadius * 0.32, 10, 8), mMat);
+    m.position.set(0, headY - headRadius * 0.18, headRadius * 0.88);
+    m.scale.set(1.0, 0.32, 0.45);
+    c.add(m);
+  }
+  // Glasses
+  if (glasses) {
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: glasses.color || 0x2a2520, roughness: 0.5, metalness: 0.3,
+    });
+    const ringGeo = new THREE.TorusGeometry(0.082, 0.013, 6, 18);
+    const gL = new THREE.Mesh(ringGeo, glassMat);
+    gL.position.set(-headRadius * 0.4, headY + headRadius * 0.05, headRadius * 0.96);
+    c.add(gL);
+    const gR = new THREE.Mesh(ringGeo, glassMat);
+    gR.position.set(headRadius * 0.4, headY + headRadius * 0.05, headRadius * 0.96);
+    c.add(gR);
+    const bridge = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6), glassMat
+    );
+    bridge.position.set(0, headY + headRadius * 0.05, headRadius * 0.96);
+    bridge.rotation.z = Math.PI / 2;
+    c.add(bridge);
+  }
+  // Hat
+  if (hat) {
+    const hatMat = new THREE.MeshStandardMaterial({ color: hat.color, roughness: 0.9 });
+    if (hat.style === 'wideBrim') {
+      const brim = new THREE.Mesh(
+        new THREE.CylinderGeometry(headRadius * 1.7, headRadius * 1.7, 0.02, 24), hatMat
+      );
+      brim.position.set(0, headY + headRadius * 0.85, 0);
+      c.add(brim);
+      const crown = new THREE.Mesh(
+        new THREE.CylinderGeometry(headRadius * 0.85, headRadius * 0.95, headRadius * 0.6, 18), hatMat
+      );
+      crown.position.set(0, headY + headRadius * 1.18, 0);
+      c.add(crown);
+    } else if (hat.style === 'cap') {
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(headRadius * 1.05, 18, 14, 0, Math.PI * 2, 0, Math.PI / 2.3), hatMat
+      );
+      dome.position.set(0, headY - 0.02, 0);
+      c.add(dome);
+    }
+  }
+
+  c.userData.body = body;
+  c.userData.head = head;
+  return c;
+}
+
+// === ENCOUNTERS ===
+const encounters = [];
+function registerEncounter({ islandPos, localPos, name, line, source, radius = 7 }) {
+  encounters.push({
+    worldX: islandPos.x + localPos.x,
+    worldY: localPos.y,
+    worldZ: islandPos.z + localPos.z,
+    name, line, source, radius,
+  });
+}
+
+// === ISLANDS ===
+const islands = [];
+function makeIsland({ name, subtitle, pos, build }) {
+  const g = new THREE.Group();
+  g.position.set(pos.x, 0, pos.z);
+  build(g, pos);
+  scene.add(g);
+  islands.push({ name, subtitle, group: g, position: g.position.clone() });
+}
+
+// ─── I · The Reckoning · 也无风雨也无晴 ───────────────────────────
+makeIsland({
+  name: 'The Reckoning',
+  subtitle: '也无风雨也无晴',
+  pos: { x: 42, z: 28 },
+  build: (g, ip) => {
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(5, 6.5, 1.8, 7),
+      new THREE.MeshStandardMaterial({ color: 0x1f1a18, roughness: 1.0, flatShading: true })
+    );
+    base.position.y = 0.4; base.castShadow = true; base.receiveShadow = true; g.add(base);
+    const crown = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.5, 4.5, 0.6, 7),
+      new THREE.MeshStandardMaterial({ color: 0x161312, roughness: 1.0, flatShading: true })
+    );
+    crown.position.y = 1.4; crown.castShadow = true; crown.receiveShadow = true; g.add(crown);
+    const sandShape = new THREE.Shape();
+    sandShape.absarc(0, 0, 2.6, 0, Math.PI * 1.3, false);
+    sandShape.absarc(0, 0, 1.4, Math.PI * 1.3, 0, true);
+    const sand = new THREE.Mesh(
+      new THREE.ShapeGeometry(sandShape),
+      new THREE.MeshStandardMaterial({ color: 0xf2e9d8, roughness: 1.0, side: THREE.DoubleSide })
+    );
+    sand.rotation.x = -Math.PI / 2; sand.position.y = 1.71; sand.receiveShadow = true; g.add(sand);
+
+    // Memorial stone
+    const stoneShape = new THREE.Shape();
+    stoneShape.moveTo(-0.7, 0);
+    stoneShape.lineTo(-0.7, 1.7);
+    stoneShape.quadraticCurveTo(-0.7, 2.2, 0, 2.2);
+    stoneShape.quadraticCurveTo(0.7, 2.2, 0.7, 1.7);
+    stoneShape.lineTo(0.7, 0);
+    stoneShape.lineTo(-0.7, 0);
+    const stoneGeo = new THREE.ExtrudeGeometry(stoneShape, {
+      depth: 0.22, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.04, bevelSegments: 3,
+    });
+    stoneGeo.center();
+    const cv = document.createElement('canvas');
+    cv.width = 384; cv.height = 768;
+    const ctx = cv.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, cv.height);
+    grad.addColorStop(0, '#5a554f'); grad.addColorStop(1, '#3a3530');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#15120e';
+    ctx.font = '600 70px "Young Serif", serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const chars = '也无风雨也无晴';
+    const lineH = 80;
+    const startY = (cv.height - chars.length * lineH) / 2 + lineH / 2;
+    for (let i = 0; i < chars.length; i++) {
+      ctx.fillText(chars[i], cv.width / 2, startY + i * lineH);
+    }
+    const stoneTex = new THREE.CanvasTexture(cv);
+    stoneTex.colorSpace = THREE.SRGBColorSpace;
+    const stone = new THREE.Mesh(stoneGeo, new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.85 }));
+    stone.position.set(0.5, 2.85, 0.4); stone.rotation.y = -0.25; stone.castShadow = true; g.add(stone);
+
+    // Stone lantern
+    {
+      const lan = new THREE.Group();
+      const grey = new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 1.0 });
+      const darkGrey = new THREE.MeshStandardMaterial({ color: 0x2a2520, roughness: 1.0 });
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.3, 6), grey);
+      b.position.y = 0.15; b.castShadow = true; lan.add(b);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.6, 6), grey);
+      stem.position.y = 0.6; stem.castShadow = true; lan.add(stem);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.32, 0.5, 6), darkGrey);
+      cap.position.y = 1.15; cap.castShadow = true; lan.add(cap);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.42, 6), darkGrey);
+      roof.position.y = 1.6; roof.castShadow = true; lan.add(roof);
+      const flame = new THREE.Mesh(
+        new THREE.SphereGeometry(0.13, 8, 6),
+        new THREE.MeshStandardMaterial({ color: 0xffae6a, emissive: 0xffa056, emissiveIntensity: 1.5, roughness: 0.5 })
+      );
+      flame.position.y = 1.15; lan.add(flame);
+      const pl = new THREE.PointLight(0xffa66a, 0.7, 9, 2);
+      pl.position.y = 1.15; lan.add(pl);
+      lan.position.set(-1.9, 1.7, -0.6); g.add(lan);
+    }
+
+    // ── 苏轼 (chibi with topknot + beard + bamboo staff)
+    const suShi = makeChibi({
+      bodyColor: 0x3a4548,
+      skinColor: 0xe0c08a,
+      headRadius: 0.36,
+      bodyHeight: 0.5,
+      bodyRadius: 0.34,
+      hair: { color: 0x2a2520, style: 'topknot' },
+      beard: { color: 0x3a3025, size: 0.55 },
+    });
+    suShi.position.set(0.4, 2.05, -0.5);
+    suShi.scale.setScalar(0.95);
+    suShi.rotation.y = Math.PI * 0.8;
+    // bamboo staff
+    {
+      const staff = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.035, 0.035, 1.4, 8),
+        new THREE.MeshStandardMaterial({ color: 0x8a6a3a, roughness: 0.9 })
+      );
+      staff.position.set(0.45, 0.0, 0.05);
+      staff.rotation.z = 0.15;
+      suShi.add(staff);
+    }
+    g.add(suShi);
+    registerEncounter({
+      islandPos: ip, localPos: { x: 0.4, y: 2.05, z: -0.5 },
+      name: '苏轼 · Su Shi (1037–1101)',
+      line: '竹杖芒鞋轻胜马。谁怕？一蓑烟雨任平生。',
+      source: '《定风波·莫听穿林打叶声》· 1082',
+    });
+
+    // ── 22 (blue glowing blob — NOT chibi proportions, just round)
+    const soul22 = new THREE.Group();
+    {
+      const blobMat = new THREE.MeshStandardMaterial({
+        color: 0x9cd0f0,
+        emissive: 0x6a9ec4, emissiveIntensity: 0.6,
+        roughness: 0.5,
+        transparent: true, opacity: 0.92,
+      });
+      const blob = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 14), blobMat);
+      blob.scale.set(1, 1.15, 1);
+      soul22.add(blob);
+      // tiny eyes
+      const eMat = new THREE.MeshBasicMaterial({ color: 0x1a2530 });
+      const eGeo = new THREE.SphereGeometry(0.045, 8, 6);
+      const eL = new THREE.Mesh(eGeo, eMat); eL.position.set(-0.11, 0.08, 0.28); soul22.add(eL);
+      const eR = new THREE.Mesh(eGeo, eMat); eR.position.set(0.11, 0.08, 0.28); soul22.add(eR);
+      const sMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const sGeo = new THREE.SphereGeometry(0.018, 6, 5);
+      const sL = new THREE.Mesh(sGeo, sMat); sL.position.set(-0.095, 0.1, 0.32); soul22.add(sL);
+      const sR = new THREE.Mesh(sGeo, sMat); sR.position.set(0.125, 0.1, 0.32); soul22.add(sR);
+      // little antenna sprout
+      const sprout = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.012, 0.012, 0.14, 6),
+        new THREE.MeshStandardMaterial({ color: 0x9cd0f0, emissive: 0x6a9ec4, emissiveIntensity: 0.4 })
+      );
+      sprout.position.y = 0.42;
+      soul22.add(sprout);
+      const tip = new THREE.Mesh(
+        new THREE.SphereGeometry(0.04, 8, 6),
+        new THREE.MeshStandardMaterial({ color: 0xb8e0f8, emissive: 0x80bce0, emissiveIntensity: 0.8 })
+      );
+      tip.position.y = 0.5;
+      soul22.add(tip);
+      soul22.userData.blob = blob;
+    }
+    soul22.position.set(-0.9, 2.0, 1.0);
+    soul22.scale.setScalar(0.85);
+    g.add(soul22);
+    registerEncounter({
+      islandPos: ip, localPos: { x: -0.9, y: 2.0, z: 1.0 },
+      name: '22 · from Soul',
+      line: '原来活着本身，就是 spark。',
+      source: 'Pixar · 2020',
+    });
+
+    // ── Miguel (chibi with messy black hair + brown skin + red hoodie + guitar)
+    const miguel = makeChibi({
+      bodyColor: 0xc24f3f,
+      skinColor: 0xc4956f,
+      headRadius: 0.36,
+      hair: { color: 0x1a1310, style: 'messy' },
+      cheeks: true,
+      eyebrows: { color: 0x1a1310 },
+    });
+    miguel.position.set(1.7, 1.95, 0.7);
+    miguel.scale.setScalar(0.75);
+    miguel.rotation.y = -0.6;
+    // tiny guitar
+    {
+      const guitar = new THREE.Group();
+      const gBody = new THREE.Mesh(
+        new THREE.SphereGeometry(0.2, 12, 10),
+        new THREE.MeshStandardMaterial({ color: 0xc4915a, roughness: 0.65 })
+      );
+      gBody.scale.set(0.7, 1, 0.4);
+      guitar.add(gBody);
+      // soundhole
+      const hole = new THREE.Mesh(
+        new THREE.CircleGeometry(0.05, 12),
+        new THREE.MeshBasicMaterial({ color: 0x2a1810 })
+      );
+      hole.position.set(0, 0, 0.041);
+      guitar.add(hole);
+      const neck = new THREE.Mesh(
+        new THREE.BoxGeometry(0.04, 0.45, 0.04),
+        new THREE.MeshStandardMaterial({ color: 0x5a3a2a, roughness: 0.85 })
+      );
+      neck.position.y = 0.3; guitar.add(neck);
+      guitar.position.set(0.32, -0.08, 0.22);
+      guitar.rotation.set(0.3, 0, -0.7);
+      miguel.add(guitar);
+    }
+    g.add(miguel);
+    registerEncounter({
+      islandPos: ip, localPos: { x: 1.7, y: 1.95, z: 0.7 },
+      name: 'Miguel · from Coco',
+      line: '记得我 —— 虽然我必须说再见。',
+      source: 'Remember Me · Coco · 2017',
+    });
+
+    g.userData.charAnim = (t) => {
+      suShi.scale.y = 0.95 + Math.sin(t * 1.0) * 0.012;
+      // 22 floats and pulses
+      soul22.position.y = 2.0 + Math.sin(t * 1.4) * 0.06;
+      if (soul22.userData.blob) {
+        soul22.userData.blob.material.emissiveIntensity = 0.55 + Math.sin(t * 2.2) * 0.18;
+      }
+      miguel.rotation.z = Math.sin(t * 2.5) * 0.03; // strum
+    };
+  },
+});
+
+// ─── II · The Storm · 自由的代价 ──────────────────────────────
+makeIsland({
+  name: 'The Storm',
+  subtitle: '自由的代价',
+  pos: { x: -28, z: -52 },
+  build: (g, ip) => {
+    const main = new THREE.Mesh(
+      new THREE.CylinderGeometry(6.5, 5.5, 2.6, 6),
+      new THREE.MeshStandardMaterial({ color: 0x4a3e36, roughness: 1.0, flatShading: true })
+    );
+    main.position.set(0, 0.9, 0); main.rotation.z = 0.18;
+    main.castShadow = true; main.receiveShadow = true; g.add(main);
+    const peak = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(2.5, 0),
+      new THREE.MeshStandardMaterial({ color: 0x2e2620, roughness: 0.95, flatShading: true })
+    );
+    peak.position.set(1.5, 3.4, -1.2); peak.rotation.set(0.3, 0.8, 0.2);
+    peak.castShadow = true; peak.receiveShadow = true; g.add(peak);
+    const chunk = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(1.5, 0),
+      new THREE.MeshStandardMaterial({ color: 0x3a3028, roughness: 0.95, flatShading: true })
+    );
+    chunk.position.set(-2.2, 2.4, 1.5); chunk.rotation.set(0.6, 0.2, 0.5);
+    chunk.castShadow = true; chunk.receiveShadow = true; g.add(chunk);
+
+    // Paper plane
+    {
+      const verts = new Float32Array([
+        0, 0, 0,    1.2, 0, -0.6,   0.4, 0.4, -1.0,
+        0, 0, 0,    1.2, 0,  0.6,   0.4, 0.4,  1.0,
+      ]);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+      geo.computeVertexNormals();
+      const plane = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+        color: 0xf2e9d8, roughness: 0.95, side: THREE.DoubleSide,
+      }));
+      plane.position.set(-2.5, 2.6, 2.2); plane.rotation.set(-0.4, 0.6, 0.2);
+      plane.castShadow = true; g.add(plane);
+    }
+    // Long sword
+    {
+      const sw = new THREE.Group();
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.04),
+        new THREE.MeshStandardMaterial({ color: 0x8a8e90, roughness: 0.4, metalness: 0.55 }));
+      blade.position.y = 1.3; blade.castShadow = true; sw.add(blade);
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.1),
+        new THREE.MeshStandardMaterial({ color: 0x6a3a2a, roughness: 0.8 }));
+      guard.position.y = 0.05; sw.add(guard);
+      const hilt = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.32, 8),
+        new THREE.MeshStandardMaterial({ color: 0x3a2a20, roughness: 0.9 }));
+      hilt.position.y = -0.16; sw.add(hilt);
+      const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6),
+        new THREE.MeshStandardMaterial({ color: 0x8a8e90, roughness: 0.4, metalness: 0.55 }));
+      pommel.position.y = -0.36; sw.add(pommel);
+      sw.position.set(0.5, 2.6, 0.5); sw.rotation.z = 0.5; g.add(sw);
+    }
+    // Cables
+    {
+      const cableMat = new THREE.MeshStandardMaterial({ color: 0x2a2820, roughness: 0.5, metalness: 0.7 });
+      const N = 9;
+      for (let i = 0; i < N; i++) {
+        const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.6, 6), cableMat);
+        const t = i / N;
+        seg.position.set(2 - t * 4.5, 2.3 + Math.sin(t * Math.PI * 2) * 0.5, -2 + Math.cos(t * Math.PI * 1.5) * 1.6);
+        seg.rotation.set(t * Math.PI * 1.2, t * Math.PI * 1.5, 0.3);
+        seg.castShadow = true; g.add(seg);
+      }
+    }
+    // Sparks
+    const sparks = [];
+    for (let i = 0; i < 16; i++) {
+      const sp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 4, 4),
+        new THREE.MeshBasicMaterial({ color: 0xff8a40, transparent: true, opacity: 0, depthWrite: false }));
+      sp.userData = {
+        life: Math.random() * 2, maxLife: 1.5 + Math.random() * 0.8,
+        vx: (Math.random() - 0.5) * 0.6, vy: 0.7 + Math.random() * 0.5,
+        vz: (Math.random() - 0.5) * 0.6, baseX: 0.5, baseY: 2.6, baseZ: 0.5,
+      };
+      g.add(sp); sparks.push(sp);
+    }
+
+    // ── Levi (chibi, undercut, green cape, serious eyebrows)
+    const levi = makeChibi({
+      bodyColor: 0x2a2620,
+      skinColor: 0xe8d8c0,
+      headRadius: 0.34,
+      hair: { color: 0x1a1612, style: 'undercut' },
+      eyebrows: { color: 0x1a1612, tilt: -0.18 },
+    });
+    // green cape
+    {
+      const cape = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.85, 1.05, 4, 4),
+        new THREE.MeshStandardMaterial({ color: 0x4a6b3a, side: THREE.DoubleSide, roughness: 0.9 })
+      );
+      cape.position.set(0, -0.05, -0.32);
+      cape.rotation.x = 0.18;
+      cape.castShadow = true;
+      levi.add(cape);
+    }
+    levi.position.set(2.0, 4.8, -1.3);
+    levi.rotation.y = -Math.PI * 0.3;
+    g.add(levi);
+    registerEncounter({
+      islandPos: ip, localPos: { x: 2.0, y: 4.8, z: -1.3 },
+      name: '利威尔 · Levi Ackerman',
+      line: '无论选哪条路都会留下后悔。所以选不让自己更后悔的那个。',
+      source: '《进击的巨人》· 谏山创',
+    });
+
+    // ── 路明非 Lu Mingfei (chibi, messy hair, glasses, tired)
+    const luming = makeChibi({
+      bodyColor: 0x3a4a5a,
+      skinColor: 0xd8b89a,
+      headRadius: 0.34,
+      hair: { color: 0x1a1612, style: 'messy' },
+      glasses: { color: 0x2a2520 },
+      eyebrows: { color: 0x1a1612, tilt: -0.05 },
+    });
+    luming.position.set(-0.5, 2.3, 1.8);
+    luming.rotation.y = Math.PI * 0.4;
+    g.add(luming);
+    registerEncounter({
+      islandPos: ip, localPos: { x: -0.5, y: 2.3, z: 1.8 },
+      name: '路明非 · Lu Mingfei',
+      line: '如果你不试一试，怎么知道自己只是个 loser 呢？',
+      source: '《龙族》· 江南',
+    });
+
+    // ── 皮皮鲁 (very chibi, flat-top, bright red shirt, cheeky)
+    const pipilu = makeChibi({
+      bodyColor: 0xc24f3f,
+      skinColor: 0xf0c89a,
+      headRadius: 0.42,  // extra big
+      bodyHeight: 0.32,
+      bodyRadius: 0.28,
+      hair: { color: 0x4a3220, style: 'flat' },
+      cheeks: true,
+      eyebrows: { color: 0x4a3220, tilt: -0.2 },
+    });
+    pipilu.position.set(-2.0, 2.4, 2.6);
+    pipilu.scale.setScalar(0.7);
+    pipilu.rotation.y = -0.8;
+    g.add(pipilu);
+    registerEncounter({
+      islandPos: ip, localPos: { x: -2.0, y: 2.4, z: 2.6 },
+      name: '皮皮鲁',
+      line: '大人说不行的，我偏要试。',
+      source: '郑渊洁 · 《皮皮鲁传》',
+    });
+
+    g.userData.charAnim = (t) => {
+      for (const sp of sparks) {
+        sp.userData.life += 0.016;
+        if (sp.userData.life > sp.userData.maxLife) {
+          sp.userData.life = 0;
+          sp.position.set(sp.userData.baseX, sp.userData.baseY, sp.userData.baseZ);
+        } else {
+          sp.position.x += sp.userData.vx * 0.016;
+          sp.position.y += (sp.userData.vy - sp.userData.life * 0.4) * 0.016;
+          sp.position.z += sp.userData.vz * 0.016;
+          sp.material.opacity = Math.max(0, 1 - sp.userData.life / sp.userData.maxLife);
+        }
+      }
+      levi.rotation.z = Math.sin(t * 0.6) * 0.04;
+      pipilu.rotation.z = Math.sin(t * 1.8) * 0.06;
+    };
+  },
+});
+
+// ─── III · The Conversation · 两边怎么想 ──────────────────────────
+makeIsland({
+  name: 'The Conversation',
+  subtitle: '两边怎么想',
+  pos: { x: 58, z: -8 },
+  build: (g, ip) => {
+    const platform = new THREE.Mesh(
+      new THREE.CylinderGeometry(6, 6.8, 1.0, 24),
+      new THREE.MeshStandardMaterial({ color: 0xb8a98a, roughness: 1.0 })
+    );
+    platform.position.y = 0.5; platform.castShadow = true; platform.receiveShadow = true; g.add(platform);
+    const inner = new THREE.Mesh(
+      new THREE.CylinderGeometry(4.5, 4.7, 0.15, 24),
+      new THREE.MeshStandardMaterial({ color: 0xa89678, roughness: 1.0 })
+    );
+    inner.position.y = 1.08; inner.receiveShadow = true; g.add(inner);
+
+    // Broken Ionic column
+    {
+      const colGrp = new THREE.Group();
+      const colMat = new THREE.MeshStandardMaterial({ color: 0xe8dfc8, roughness: 0.9 });
+      const cBase = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 0.18, 12), colMat);
+      cBase.position.y = 0.09; cBase.castShadow = true; colGrp.add(cBase);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 1.8, 16), colMat);
+      shaft.position.y = 1.08; shaft.castShadow = true; colGrp.add(shaft);
+      for (let i = 0; i < 4; i++) {
+        const chip = new THREE.Mesh(
+          new THREE.DodecahedronGeometry(0.16 + (i % 2) * 0.08, 0), colMat
+        );
+        chip.position.set((i - 1.5) * 0.18, 1.98 + (i % 2) * 0.08, (i % 2 === 0 ? 0.15 : -0.15));
+        chip.rotation.set(i * 0.7, i * 1.1, i * 0.4);
+        chip.castShadow = true; colGrp.add(chip);
+      }
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 0.7), colMat);
+      cap.position.set(0.6, 1.18, 1.5); cap.rotation.set(0.2, 0.4, 0.1);
+      cap.castShadow = true; colGrp.add(cap);
+      colGrp.position.set(-2.8, 0, 0.5); g.add(colGrp);
+    }
+    // Stone lantern
+    {
+      const lan = new THREE.Group();
+      const lightStone = new THREE.MeshStandardMaterial({ color: 0x8a8478, roughness: 1.0 });
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.48, 0.3, 6), lightStone);
+      b.position.y = 0.15; b.castShadow = true; lan.add(b);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.55, 6), lightStone);
+      stem.position.y = 0.58; stem.castShadow = true; lan.add(stem);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.32, 0.45, 6), lightStone);
+      cap.position.y = 1.08; cap.castShadow = true; lan.add(cap);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.4, 6), lightStone);
+      roof.position.y = 1.5; roof.castShadow = true; lan.add(roof);
+      const flame = new THREE.Mesh(
+        new THREE.SphereGeometry(0.11, 8, 6),
+        new THREE.MeshStandardMaterial({ color: 0xffba78, emissive: 0xffa056, emissiveIntensity: 1.3, roughness: 0.5 })
+      );
+      flame.position.y = 1.08; lan.add(flame);
+      const pl = new THREE.PointLight(0xffa66a, 0.55, 7, 2);
+      pl.position.y = 1.08; lan.add(pl);
+      lan.position.set(2.8, 1.05, 0.5); g.add(lan);
+    }
+    // Table
+    const table = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 1.3),
+      new THREE.MeshStandardMaterial({ color: 0x5a3f2a, roughness: 0.9 }));
+    table.position.set(0, 1.55, 0); table.castShadow = true; g.add(table);
+    for (const [x, z] of [[-0.95, -0.5], [0.95, -0.5], [-0.95, 0.5], [0.95, 0.5]]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.45, 0.08),
+        new THREE.MeshStandardMaterial({ color: 0x4a3220, roughness: 0.9 }));
+      leg.position.set(x, 1.28, z); leg.castShadow = true; g.add(leg);
+    }
+    // Books on table
+    {
+      const bV = new THREE.Group();
+      bV.add(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.04, 0.7),
+        new THREE.MeshStandardMaterial({ color: 0x6a3a2a, roughness: 0.85 })));
+      const pV = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.025, 0.62),
+        new THREE.MeshStandardMaterial({ color: 0xf2e9d8, roughness: 0.95 }));
+      pV.position.y = 0.035; bV.add(pV);
+      bV.position.set(-0.55, 1.62, 0); bV.rotation.y = -0.18; g.add(bV);
+
+      const bH = new THREE.Group();
+      bH.add(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.5),
+        new THREE.MeshStandardMaterial({ color: 0x3a4a6a, roughness: 0.85 })));
+      const pH = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.025, 0.45),
+        new THREE.MeshStandardMaterial({ color: 0xf2e9d8, roughness: 0.95 }));
+      pH.position.y = 0.035; bH.add(pH);
+      bH.position.set(0.55, 1.62, 0); bH.rotation.y = 0.2; g.add(bH);
+    }
+    // Tea + steam
+    const teaSteams = [];
+    for (const [x, z, idx] of [[-0.9, 0.45, 0], [0.9, 0.45, 1]]) {
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.16, 12),
+        new THREE.MeshStandardMaterial({ color: 0xebe2d0, roughness: 0.7 }));
+      cup.position.set(x, 1.69, z); cup.castShadow = true; g.add(cup);
+      const liquid = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.105, 0.02, 12),
+        new THREE.MeshStandardMaterial({ color: 0x5a3a2a, roughness: 0.4 }));
+      liquid.position.set(x, 1.78, z); g.add(liquid);
+      for (let i = 0; i < 3; i++) {
+        const s = new THREE.Mesh(new THREE.SphereGeometry(0.08 + i * 0.04, 6, 5),
+          new THREE.MeshBasicMaterial({ color: 0xf0e8d8, transparent: true, opacity: 0, depthWrite: false }));
+        s.position.set(x, 1.85 + i * 0.15, z);
+        s.userData = { baseX: x, baseZ: z, life: Math.random() * 2, idx: i };
+        g.add(s); teaSteams.push(s);
+      }
+    }
+
+    // ── 刘擎 (chibi, short hair, glasses, cream sweater)
+    const liuQing = makeChibi({
+      bodyColor: 0xa89478,
+      skinColor: 0xd8b896,
+      headRadius: 0.34,
+      hair: { color: 0x1a1612, style: 'short' },
+      glasses: { color: 0x2a2520 },
+      eyebrows: { color: 0x1a1612, tilt: 0 },
+    });
+    liuQing.position.set(-1.7, 1.95, 0);
+    liuQing.scale.setScalar(0.95);
+    liuQing.rotation.y = Math.PI * 0.5;
+    g.add(liuQing);
+    registerEncounter({
+      islandPos: ip, localPos: { x: -1.7, y: 1.95, z: 0 },
+      name: '刘擎 · Liu Qing',
+      line: '现代人最大的困境，是在祛魅的世界里寻找意义。',
+      source: '《西方现代思想四十讲》· 2021',
+    });
+
+    // ── Tamar Gendler (chibi, short brown hair, glasses, navy blazer)
+    const gendler = makeChibi({
+      bodyColor: 0x2a3a5a,
+      skinColor: 0xe8c896,
+      headRadius: 0.34,
+      hair: { color: 0x4a2818, style: 'short' },
+      glasses: { color: 0x2a2520 },
+      eyebrows: { color: 0x4a2818, tilt: 0.05 },
+    });
+    gendler.position.set(1.7, 1.95, 0);
+    gendler.scale.setScalar(0.95);
+    gendler.rotation.y = -Math.PI * 0.5;
+    g.add(gendler);
+    registerEncounter({
+      islandPos: ip, localPos: { x: 1.7, y: 1.95, z: 0 },
+      name: 'Tamar Gendler',
+      line: "Reason isn't the rider. Reason is the horse, pretending to be the rider.",
+      source: 'Yale · Philosophy and the Science of Human Nature',
+    });
+
+    // ── Yuval Harari (BALD chibi with round glasses + wheat bundle + beige clothing)
+    const harari = makeChibi({
+      bodyColor: 0xa89478,
+      skinColor: 0xe8c896,
+      headRadius: 0.34,
+      // no hair — bald
+      glasses: { color: 0x2a2520 },
+      eyebrows: { color: 0x2a2520, tilt: 0 },
+    });
+    harari.position.set(0, 1.65, -2.6);
+    harari.scale.setScalar(0.95);
+    harari.rotation.y = 0;
+    // wheat bundle
+    {
+      const wheat = new THREE.Group();
+      const stalkMat = new THREE.MeshStandardMaterial({ color: 0xe0c478, roughness: 0.95 });
+      for (let i = 0; i < 9; i++) {
+        const st = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.55, 4), stalkMat);
+        st.position.set((i - 4) * 0.022, 0, 0);
+        st.rotation.z = (Math.random() - 0.5) * 0.15;
+        wheat.add(st);
+        const head = new THREE.Mesh(
+          new THREE.SphereGeometry(0.04, 6, 4),
+          new THREE.MeshStandardMaterial({ color: 0xd8b860, roughness: 0.95 })
+        );
+        head.position.set((i - 4) * 0.022, 0.32, 0);
+        head.scale.set(1, 1.6, 1);
+        wheat.add(head);
+      }
+      wheat.position.set(0.3, 0.05, 0.3);
+      wheat.rotation.set(-0.65, 0.4, 0);
+      harari.add(wheat);
+    }
+    g.add(harari);
+    registerEncounter({
+      islandPos: ip, localPos: { x: 0, y: 1.65, z: -2.6 },
+      name: 'Yuval Noah Harari',
+      line: "We didn't domesticate wheat. Wheat domesticated us.",
+      source: '《Sapiens》· 2011',
+    });
+
+    g.userData.charAnim = (t) => {
+      // ghost-like quiet breath
+      liuQing.scale.y = 0.95 + Math.sin(t * 1.1) * 0.012;
+      gendler.scale.y = 0.95 + Math.sin(t * 1.1 + 0.7) * 0.012;
+      harari.scale.y = 0.95 + Math.sin(t * 0.9) * 0.01;
+      for (const s of teaSteams) {
+        s.userData.life += 0.016;
+        const phase = s.userData.life % 2.0;
+        s.position.y = 1.85 + s.userData.idx * 0.15 + phase * 0.5;
+        s.material.opacity = Math.max(0, 0.48 * (1 - phase / 2.0));
+        s.scale.setScalar(1 + phase * 0.5);
+      }
+    };
+  },
+});
+
+// ─── IV · The Rain Market · 雨街上的一口 ───────────────────────────
+makeIsland({
+  name: 'The Rain Market',
+  subtitle: '雨街上的一口',
+  pos: { x: -48, z: 12 },
+  build: (g, ip) => {
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(8, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: 0x4a6a3a, roughness: 0.85 })
+    );
+    dome.scale.set(1, 0.42, 1); dome.castShadow = true; dome.receiveShadow = true; g.add(dome);
+    const wetSand = new THREE.Mesh(
+      new THREE.RingGeometry(7, 10, 36),
+      new THREE.MeshStandardMaterial({ color: 0xa89878, roughness: 0.6 })
+    );
+    wetSand.rotation.x = -Math.PI / 2; wetSand.position.y = 0.04; wetSand.receiveShadow = true; g.add(wetSand);
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.6, 0.85, 4.5, 8),
+      new THREE.MeshStandardMaterial({ color: 0x4a3220, roughness: 0.95 })
+    );
+    trunk.position.set(-1, 2.6, -0.5); trunk.castShadow = true; g.add(trunk);
+    for (let i = 0; i < 4; i++) {
+      const foliage = new THREE.Mesh(
+        new THREE.SphereGeometry(3.0 - i * 0.4, 14, 10),
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color().setRGB(0.32 + i * 0.04, 0.5 + i * 0.04, 0.28),
+          roughness: 0.95, flatShading: true,
+        })
+      );
+      foliage.position.set(-1 + i * 0.15, 4.8 + i * 0.7, -0.5);
+      foliage.castShadow = true; g.add(foliage);
+    }
+    // Food stall
+    {
+      const stall = new THREE.Group();
+      const woodMat = new THREE.MeshStandardMaterial({ color: 0x6a4a2a, roughness: 0.9 });
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 1.0), woodMat);
+      top.position.y = 0.9; top.castShadow = true; stall.add(top);
+      for (const [x, z] of [[-0.7, -0.4], [0.7, -0.4], [-0.7, 0.4], [0.7, 0.4]]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.9, 0.08), woodMat);
+        leg.position.set(x, 0.45, z); leg.castShadow = true; stall.add(leg);
+      }
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 0.35, 14),
+        new THREE.MeshStandardMaterial({ color: 0x2a2520, roughness: 0.7, metalness: 0.3 }));
+      pot.position.set(-0.3, 1.12, 0); pot.castShadow = true; stall.add(pot);
+      const hl = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8),
+        new THREE.MeshStandardMaterial({ color: 0xc24f3f, emissive: 0xc24f3f, emissiveIntensity: 0.55, roughness: 0.7 }));
+      hl.scale.set(1, 1.2, 1); hl.position.set(0.5, 1.55, 0); stall.add(hl);
+      const ll = new THREE.PointLight(0xff6a40, 0.55, 6, 2);
+      ll.position.set(0.5, 1.55, 0); stall.add(ll);
+      const str = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.5, 4),
+        new THREE.MeshBasicMaterial({ color: 0x3a2a20 }));
+      str.position.set(0.5, 1.85, 0); stall.add(str);
+      stall.position.set(2.0, 0.05, 1.5); g.add(stall);
+    }
+    // Pot steam
+    const potSteams = [];
+    for (let i = 0; i < 5; i++) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.12 + i * 0.05, 6, 5),
+        new THREE.MeshBasicMaterial({ color: 0xe0d8c8, transparent: true, opacity: 0, depthWrite: false }));
+      s.position.set(1.7, 1.25 + i * 0.25, 1.5);
+      s.userData = { baseY: 1.25, idx: i, life: Math.random() * 3 };
+      g.add(s); potSteams.push(s);
+    }
+    // Lily pads
+    for (let i = 0; i < 9; i++) {
+      const angle = (i / 9) * Math.PI * 2 + 0.2;
+      const r = 9.5 + (i % 3) * 0.7;
+      const pad = new THREE.Mesh(
+        new THREE.CircleGeometry(0.4 + (i % 3) * 0.12, 10),
+        new THREE.MeshStandardMaterial({ color: 0x3a5a3a, roughness: 0.95, side: THREE.DoubleSide })
+      );
+      pad.rotation.x = -Math.PI / 2;
+      pad.position.set(Math.cos(angle) * r, 0.08, Math.sin(angle) * r);
+      g.add(pad);
+      if (i % 3 === 0) {
+        const flower = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6),
+          new THREE.MeshStandardMaterial({ color: 0xfaf3dd, roughness: 0.8 }));
+        flower.position.set(pad.position.x, 0.16, pad.position.z); g.add(flower);
+      }
+    }
+
+    // ── 撑伞的台南人 (chibi with umbrella + bowl)
+    const tainan = makeChibi({
+      bodyColor: 0x4a6a8a,
+      skinColor: 0xd0a878,
+      headRadius: 0.32,
+      hair: { color: 0x2a2018, style: 'short' },
+      cheeks: true,
+      eyebrows: { color: 0x2a2018 },
+    });
+    // umbrella canopy
+    {
+      const canopy = new THREE.Mesh(
+        new THREE.ConeGeometry(0.78, 0.42, 16, 1, true),
+        new THREE.MeshStandardMaterial({ color: 0xa64925, roughness: 0.85, side: THREE.DoubleSide })
+      );
+      canopy.position.y = 1.35;
+      canopy.castShadow = true;
+      tainan.add(canopy);
+      const handle = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.022, 0.022, 1.1, 6),
+        new THREE.MeshStandardMaterial({ color: 0x3a2a20, roughness: 0.9 })
+      );
+      handle.position.y = 0.85;
+      tainan.add(handle);
+      // bowl
+      const bowl = new THREE.Mesh(
+        new THREE.SphereGeometry(0.13, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: 0xebe2d0, roughness: 0.7 })
+      );
+      bowl.position.set(0, 0.12, 0.3);
+      bowl.rotation.x = Math.PI;
+      tainan.add(bowl);
+      const bowlSteam = new THREE.Mesh(
+        new THREE.SphereGeometry(0.07, 6, 5),
+        new THREE.MeshBasicMaterial({ color: 0xf0e8d8, transparent: true, opacity: 0.45, depthWrite: false })
+      );
+      bowlSteam.position.set(0, 0.34, 0.3);
+      tainan.add(bowlSteam);
+      tainan.userData.bowlSteam = bowlSteam;
+      // stool
+      const stool = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.22, 0.08, 8),
+        new THREE.MeshStandardMaterial({ color: 0x6a4a2a, roughness: 0.9 })
+      );
+      stool.position.y = -0.4;
+      stool.castShadow = true;
+      tainan.add(stool);
+    }
+    tainan.position.set(2.5, 1.95, 2.5);
+    tainan.rotation.y = -Math.PI * 0.55;
+    g.add(tainan);
+    registerEncounter({
+      islandPos: ip, localPos: { x: 2.5, y: 1.95, z: 2.5 },
+      name: '撑伞的台南人 · The Umbrella Stranger',
+      line: '雨下大才有人坐下来慢慢吃。',
+      source: '台南 · 神农街',
+    });
+
+    // ── 椅子乐团 The Chairs (chibi with messy long-ish hair + cream shirt + guitar)
+    const chairs = makeChibi({
+      bodyColor: 0xebe2d0,
+      skinColor: 0xd4b896,
+      headRadius: 0.34,
+      hair: { color: 0x2a1810, style: 'long' },
+      cheeks: false,
+      eyebrows: { color: 0x2a1810 },
+    });
+    // acoustic guitar
+    {
+      const guitar = new THREE.Group();
+      const gBody = new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 12, 10),
+        new THREE.MeshStandardMaterial({ color: 0xc4915a, roughness: 0.65 })
+      );
+      gBody.scale.set(0.7, 1, 0.4);
+      guitar.add(gBody);
+      const hole = new THREE.Mesh(
+        new THREE.CircleGeometry(0.055, 12),
+        new THREE.MeshBasicMaterial({ color: 0x2a1810 })
+      );
+      hole.position.set(0, 0, 0.041);
+      guitar.add(hole);
+      const neck = new THREE.Mesh(
+        new THREE.BoxGeometry(0.04, 0.55, 0.04),
+        new THREE.MeshStandardMaterial({ color: 0x5a3a2a, roughness: 0.85 })
+      );
+      neck.position.y = 0.38;
+      guitar.add(neck);
+      guitar.position.set(0.32, -0.05, 0.22);
+      guitar.rotation.set(0.3, 0, -0.7);
+      chairs.add(guitar);
+    }
+    chairs.position.set(-1.5, 1.95, 0.8);
+    chairs.rotation.y = -0.4;
+    g.add(chairs);
+    registerEncounter({
+      islandPos: ip, localPos: { x: -1.5, y: 1.95, z: 0.8 },
+      name: '椅子乐团 · The Chairs',
+      line: '日常的镜头 / 也是日常的光。',
+      source: '椅子乐团 · 《日常的镜头》',
+    });
+
+    // ── Claude Monet (chibi with WIDE-BRIM hat + bushy WHITE BEARD + smock + easel)
+    const monet = makeChibi({
+      bodyColor: 0x6a7a6a,
+      skinColor: 0xe8c8a8,
+      headRadius: 0.34,
+      hat: { color: 0xa89878, style: 'wideBrim' },
+      beard: { color: 0xf0ede0, size: 0.7 },
+      mustache: { color: 0xf0ede0 },
+      eyebrows: { color: 0xc8c0b0, tilt: 0 },
+    });
+    monet.position.set(0.5, 0.65, 5.5);
+    monet.rotation.y = -0.3;
+    // small easel
+    {
+      const easel = new THREE.Group();
+      const woodMat = new THREE.MeshStandardMaterial({ color: 0x5a3a2a, roughness: 0.9 });
+      for (let i = 0; i < 3; i++) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1.2, 5), woodMat);
+        const a = (i / 3) * Math.PI * 2;
+        leg.position.set(Math.cos(a) * 0.18, -0.5, Math.sin(a) * 0.18);
+        leg.rotation.x = -Math.cos(a) * 0.15;
+        leg.rotation.z = Math.sin(a) * 0.15;
+        easel.add(leg);
+      }
+      const canvas = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.45, 0.02),
+        new THREE.MeshStandardMaterial({ color: 0x8fb4a8, roughness: 0.95 })
+      );
+      canvas.position.set(0, 0.15, 0); easel.add(canvas);
+      easel.position.set(0.5, 0.05, 0.3);
+      monet.add(easel);
+    }
+    g.add(monet);
+    registerEncounter({
+      islandPos: ip, localPos: { x: 0.5, y: 0.65, z: 5.5 },
+      name: 'Claude Monet · 莫奈',
+      line: '我想画空气本身——画桥、房子、船所处的那层空气。',
+      source: '1893 · 致 Geffroy',
+    });
+
+    // RAIN
+    const rainCount = 600;
+    const rainGeo = new THREE.BufferGeometry();
+    const rainPositions = new Float32Array(rainCount * 3);
+    const rainVelocities = new Float32Array(rainCount);
+    const RAIN_RADIUS = 13, RAIN_TOP = 20;
+    for (let i = 0; i < rainCount; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * RAIN_RADIUS;
+      rainPositions[i * 3] = Math.cos(a) * r;
+      rainPositions[i * 3 + 1] = Math.random() * RAIN_TOP;
+      rainPositions[i * 3 + 2] = Math.sin(a) * r;
+      rainVelocities[i] = 16 + Math.random() * 10;
+    }
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+    const rainMat = new THREE.PointsMaterial({
+      color: 0xc8d4dc, size: 0.09, transparent: true, opacity: 0.58, depthWrite: false,
+    });
+    const rain = new THREE.Points(rainGeo, rainMat);
+    g.add(rain);
+
+    g.userData.charAnim = (t) => {
+      tainan.rotation.z = Math.sin(t * 0.6) * 0.015;
+      const bs = tainan.userData.bowlSteam;
+      if (bs) {
+        const ph = (t * 0.7) % 1.5;
+        bs.position.y = 0.34 + ph * 0.22;
+        bs.material.opacity = Math.max(0, 0.4 * (1 - ph / 1.5));
+        bs.scale.setScalar(1 + ph * 0.3);
+      }
+      for (const s of potSteams) {
+        s.userData.life += 0.016;
+        const ph = s.userData.life % 2.5;
+        s.position.y = 1.25 + s.userData.idx * 0.25 + ph * 0.55;
+        s.material.opacity = Math.max(0, 0.5 * (1 - ph / 2.5));
+        s.scale.setScalar(1 + ph * 0.4);
+      }
+      chairs.rotation.z = Math.sin(t * 1.6) * 0.02;
+      monet.rotation.y = -0.3 + Math.sin(t * 0.9) * 0.06;
+      for (let i = 0; i < rainCount; i++) {
+        rainPositions[i * 3 + 1] -= rainVelocities[i] * 0.016;
+        if (rainPositions[i * 3 + 1] < 0) rainPositions[i * 3 + 1] = RAIN_TOP;
+      }
+      rainGeo.attributes.position.needsUpdate = true;
+    };
+  },
+});
+
+// === CONTROLS ===
+const keys = {};
+addEventListener('keydown', (e) => { keys[e.code] = true; });
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+const stick = document.getElementById('stick');
+const knob = stick.firstElementChild;
+const stickInput = { x: 0, y: 0, active: false };
+stick.addEventListener('pointerdown', (e) => {
+  stickInput.active = true;
+  stick.setPointerCapture(e.pointerId);
+});
+stick.addEventListener('pointermove', (e) => {
+  if (!stickInput.active) return;
+  const r = stick.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let dx = e.clientX - cx, dy = e.clientY - cy;
+  const max = r.width / 2 - 26;
+  const d = Math.hypot(dx, dy);
+  if (d > max) { dx = dx / d * max; dy = dy / d * max; }
+  knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  stickInput.x = dx / max;
+  stickInput.y = dy / max;
+});
+const endStick = () => {
+  stickInput.active = false;
+  stickInput.x = 0; stickInput.y = 0;
+  knob.style.transform = 'translate(-50%, -50%)';
+};
+stick.addEventListener('pointerup', endStick);
+stick.addEventListener('pointercancel', endStick);
+
+// === BOAT PHYSICS ===
+const boatState = { velocity: 0, heading: Math.PI * 0.25, turnRate: 0 };
+const MAX_SPEED = 11, ACCEL = 3.2, DRAG = 1.1, TURN_RATE_MAX = 0.5, TURN_LERP = 0.045;
+
+function updateBoat(dt, time) {
+  let throttle = 0, steer = 0;
+  if (keys.KeyW || keys.ArrowUp)   throttle += 1;
+  if (keys.KeyS || keys.ArrowDown) throttle -= 0.7;
+  if (keys.KeyA || keys.ArrowLeft) steer += 1;
+  if (keys.KeyD || keys.ArrowRight) steer -= 1;
+  if (stickInput.x !== 0 || stickInput.y !== 0) {
+    throttle += -stickInput.y;
+    steer += -stickInput.x;
+  }
+  throttle = Math.max(-1, Math.min(1, throttle));
+  steer = Math.max(-1, Math.min(1, steer));
+
+  if (throttle > 0) boatState.velocity += ACCEL * throttle * dt;
+  else if (throttle < 0) boatState.velocity += ACCEL * throttle * 0.55 * dt;
+  else {
+    if (boatState.velocity > 0) boatState.velocity = Math.max(0, boatState.velocity - DRAG * dt);
+    else if (boatState.velocity < 0) boatState.velocity = Math.min(0, boatState.velocity + DRAG * dt);
+  }
+  boatState.velocity = Math.max(-MAX_SPEED * 0.35, Math.min(MAX_SPEED, boatState.velocity));
+
+  const speedFactor = Math.min(1, Math.abs(boatState.velocity) / 2.5);
+  const targetTurn = steer * TURN_RATE_MAX * speedFactor * Math.sign(boatState.velocity || 1);
+  boatState.turnRate += (targetTurn - boatState.turnRate) * TURN_LERP;
+  boatState.heading += boatState.turnRate * dt;
+
+  boat.position.x += Math.sin(boatState.heading) * boatState.velocity * dt;
+  boat.position.z += Math.cos(boatState.heading) * boatState.velocity * dt;
+
+  const wHere = sampleWave(boat.position.x, boat.position.z, time);
+  boat.position.y = wHere * 0.55 + 0.08;
+  const wAhead = sampleWave(boat.position.x + Math.sin(boatState.heading) * 1.6, boat.position.z + Math.cos(boatState.heading) * 1.6, time);
+  const wBehind = sampleWave(boat.position.x - Math.sin(boatState.heading) * 1.6, boat.position.z - Math.cos(boatState.heading) * 1.6, time);
+  const wPort = sampleWave(boat.position.x + Math.cos(boatState.heading) * 1.0, boat.position.z - Math.sin(boatState.heading) * 1.0, time);
+  const wStbd = sampleWave(boat.position.x - Math.cos(boatState.heading) * 1.0, boat.position.z + Math.sin(boatState.heading) * 1.0, time);
+  boat.rotation.set((wAhead - wBehind) * 0.09, boatState.heading, (wPort - wStbd) * 0.11);
+
+  wakeTimer += dt;
+  if (wakeTimer > 0.13) {
+    wakeTimer = 0;
+    emitWake(boatState.heading, boatState.velocity);
+  }
+}
+
+// === CAMERA FOLLOW ===
+const camOffset = new THREE.Vector3(0, 4.2, -8.5);
+const camDesired = new THREE.Vector3();
+const camTarget = new THREE.Vector3();
+function updateCamera(dt) {
+  const off = camOffset.clone();
+  off.applyAxisAngle(new THREE.Vector3(0, 1, 0), boatState.heading);
+  camDesired.copy(boat.position).add(off);
+  camDesired.y = Math.max(camDesired.y, 3.5);
+  camera.position.lerp(camDesired, 1 - Math.pow(0.0006, dt));
+  camTarget.set(boat.position.x, boat.position.y + 1.4, boat.position.z);
+  camera.lookAt(camTarget);
+}
+
+// === PROXIMITY + ENTER-TO-TALK ===
+const nameEl = document.getElementById('island-name');
+const promptEl = document.getElementById('talk-prompt');
+const encEl = document.getElementById('encounter');
+const encNameEl = encEl.querySelector('.enc-name');
+const encLineEl = encEl.querySelector('.enc-line');
+const encSrcEl = encEl.querySelector('.enc-source');
+
+let currentNamed = null;
+let currentNearestEnc = null;
+let currentNearestEncDist = Infinity;
+let talkingTo = null;
+
+function shortName(fullName) {
+  return fullName.split(/\s·\s/)[0];
+}
+function showPrompt(enc) {
+  promptEl.innerHTML = `<kbd>↵</kbd>与 <strong>${shortName(enc.name)}</strong> 交谈`;
+  promptEl.classList.add('show');
+}
+function hidePrompt() {
+  promptEl.classList.remove('show');
+}
+function startTalk(enc) {
+  talkingTo = enc;
+  encNameEl.textContent = enc.name;
+  encLineEl.textContent = '"' + enc.line + '"';
+  encSrcEl.textContent = enc.source;
+  encEl.classList.add('show');
+  hidePrompt();
+  // Optional: notify parent window (Eazo wrapper) so it can persist to memory.
+  // No-op when running standalone.
+  try {
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: 'encounter:open',
+        name: enc.name, line: enc.line, source: enc.source,
+      }, '*');
+    }
+  } catch (_) { /* ignore */ }
+}
+function endTalk() {
+  talkingTo = null;
+  encEl.classList.remove('show');
+}
+
+addEventListener('keydown', (e) => {
+  if (e.code === 'Enter') {
+    e.preventDefault();
+    if (talkingTo) { endTalk(); return; }
+    if (currentNearestEnc && currentNearestEncDist < currentNearestEnc.radius) {
+      startTalk(currentNearestEnc);
+    }
+  } else if (e.code === 'Escape') {
+    if (talkingTo) endTalk();
+  }
+});
+promptEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (currentNearestEnc && currentNearestEncDist < currentNearestEnc.radius) {
+    startTalk(currentNearestEnc);
+  }
+});
+encEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (talkingTo) endTalk();
+});
+
+function updateProximity() {
+  let nearestIsland = null, nIDist = Infinity;
+  for (const i of islands) {
+    const d = boat.position.distanceTo(i.position);
+    if (d < nIDist) { nearestIsland = i; nIDist = d; }
+  }
+  let nearestEnc = null, nEDist = Infinity;
+  for (const enc of encounters) {
+    const dx = enc.worldX - boat.position.x;
+    const dz = enc.worldZ - boat.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d < nEDist) { nearestEnc = enc; nEDist = d; }
+  }
+  currentNearestEnc = nearestEnc;
+  currentNearestEncDist = nEDist;
+
+  const inRange = nearestEnc && nEDist < nearestEnc.radius;
+
+  // End talk if moved out of range or switched person
+  if (talkingTo && (!inRange || nearestEnc !== talkingTo)) {
+    endTalk();
+  }
+
+  // Prompt visibility
+  if (inRange && !talkingTo) {
+    showPrompt(nearestEnc);
+    nameEl.style.opacity = '0';
+    currentNamed = null;
+  } else if (talkingTo) {
+    hidePrompt();
+    nameEl.style.opacity = '0';
+    currentNamed = null;
+  } else {
+    hidePrompt();
+    // Island name fallback
+    if (nearestIsland && nIDist < 26) {
+      if (currentNamed !== nearestIsland) {
+        currentNamed = nearestIsland;
+        nameEl.innerHTML = `${nearestIsland.name}<small>${nearestIsland.subtitle}</small>`;
+      }
+      const fade = Math.max(0, Math.min(1, 1 - (nIDist - 14) / 12));
+      nameEl.style.opacity = fade.toFixed(3);
+    } else {
+      nameEl.style.opacity = '0';
+      currentNamed = null;
+    }
+  }
+}
+
+// === COMPASS / HINT ===
+const needle = document.getElementById('compass-needle');
+function updateCompass() {
+  const deg = -(boatState.heading * 180 / Math.PI);
+  needle.style.transform = `translate(-50%, -100%) rotate(${deg}deg)`;
+}
+const hintEl = document.getElementById('hint');
+let moved = false;
+function maybeFadeHint() {
+  if (moved) return;
+  if (Math.abs(boatState.velocity) > 0.6) {
+    moved = true;
+    setTimeout(() => hintEl.classList.add('faded'), 3500);
+  }
+}
+
+camera.position.set(boat.position.x + 6, 9, boat.position.z + 14);
+camera.lookAt(boat.position);
+
+// === AUDIO LAYERS ===
+const audioToggle = document.getElementById('audio-toggle');
+const MUSIC_CANDIDATES = ['audio/baguira.mp3', 'audio/boy.mp3', 'audio/sudo.mp3'];
+const AMBIENT_LAYERS = [
+  { src: 'audio/waves.mp3', baseVol: 0.20, audio: null },
+  { src: 'audio/wind.mp3',  baseVol: 0.12, audio: null },
+];
+const PROX_LAYERS = [
+  { src: 'audio/rain.mp3', maxVol: 0.42, audio: null, targetName: 'The Rain Market', radius: 24 },
+];
+let musicTracks = [];
+let currentMusic = null;
+let userWantsAudio = true;
+const MUSIC_VOL = 0.30;
+const FADE_MS = 1400;
+
+async function probeAll() {
+  for (const path of MUSIC_CANDIDATES) {
+    try { const r = await fetch(path, { method: 'HEAD' }); if (r.ok) musicTracks.push(path); } catch (_) {}
+  }
+  for (const layer of AMBIENT_LAYERS) {
+    try {
+      const r = await fetch(layer.src, { method: 'HEAD' });
+      if (!r.ok) continue;
+      const a = new Audio(layer.src);
+      a.loop = true; a.volume = 0; a.preload = 'auto';
+      layer.audio = a;
+    } catch (_) {}
+  }
+  for (const layer of PROX_LAYERS) {
+    try {
+      const r = await fetch(layer.src, { method: 'HEAD' });
+      if (!r.ok) continue;
+      const a = new Audio(layer.src);
+      a.loop = true; a.volume = 0; a.preload = 'auto';
+      layer.audio = a;
+    } catch (_) {}
+  }
+  const any = musicTracks.length > 0 ||
+              AMBIENT_LAYERS.some(l => l.audio) ||
+              PROX_LAYERS.some(l => l.audio);
+  if (any) {
+    audioToggle.classList.remove('unavailable');
+    audioToggle.classList.remove('muted');
+    const start = () => {
+      removeEventListener('keydown', start);
+      removeEventListener('pointerdown', start);
+      startAll();
+    };
+    addEventListener('keydown', start, { once: true });
+    addEventListener('pointerdown', start, { once: true });
+  }
+}
+function startAll() {
+  if (musicTracks.length > 0) playNextMusic();
+  for (const layer of AMBIENT_LAYERS) {
+    if (!layer.audio) continue;
+    layer.audio.play().catch(() => {});
+    fadeVolume(layer.audio, layer.baseVol, 2400);
+  }
+  for (const layer of PROX_LAYERS) {
+    if (!layer.audio) continue;
+    layer.audio.play().catch(() => {});
+  }
+}
+function playNextMusic() {
+  if (!userWantsAudio || musicTracks.length === 0) return;
+  const next = musicTracks[Math.floor(Math.random() * musicTracks.length)];
+  const a = new Audio(next);
+  a.volume = 0; a.preload = 'auto';
+  a.addEventListener('canplaythrough', () => {
+    a.play().catch(() => {});
+    fadeVolume(a, MUSIC_VOL, FADE_MS);
+  }, { once: true });
+  a.addEventListener('ended', () => {
+    currentMusic = null;
+    if (userWantsAudio) playNextMusic();
+  });
+  if (currentMusic) {
+    const old = currentMusic;
+    fadeVolume(old, 0, FADE_MS, () => old.pause());
+  }
+  currentMusic = a;
+}
+function fadeVolume(audio, target, duration, onDone) {
+  const start = audio.volume;
+  const delta = target - start;
+  const t0 = performance.now();
+  const tick = (now) => {
+    const t = Math.min(1, (now - t0) / duration);
+    audio.volume = start + delta * t;
+    if (t < 1) requestAnimationFrame(tick);
+    else if (onDone) onDone();
+  };
+  requestAnimationFrame(tick);
+}
+function updateProximityAudio() {
+  for (const layer of PROX_LAYERS) {
+    if (!layer.audio) continue;
+    const island = islands.find(i => i.name === layer.targetName);
+    if (!island) continue;
+    const d = boat.position.distanceTo(island.position);
+    const closeness = Math.max(0, 1 - d / layer.radius);
+    const eased = closeness * closeness;
+    const target = eased * layer.maxVol * (userWantsAudio ? 1 : 0);
+    layer.audio.volume = layer.audio.volume + (target - layer.audio.volume) * 0.06;
+  }
+}
+audioToggle.addEventListener('click', () => {
+  userWantsAudio = !userWantsAudio;
+  audioToggle.classList.toggle('muted', !userWantsAudio);
+  if (userWantsAudio) {
+    if (!currentMusic && musicTracks.length > 0) playNextMusic();
+    else if (currentMusic) fadeVolume(currentMusic, MUSIC_VOL, 600);
+    for (const layer of AMBIENT_LAYERS) if (layer.audio) fadeVolume(layer.audio, layer.baseVol, 600);
+  } else {
+    if (currentMusic) fadeVolume(currentMusic, 0, 500);
+    for (const layer of AMBIENT_LAYERS) if (layer.audio) fadeVolume(layer.audio, 0, 500);
+    for (const layer of PROX_LAYERS) if (layer.audio) fadeVolume(layer.audio, 0, 500);
+  }
+});
+probeAll();
+
+// === LOOP ===
+let last = performance.now();
+let elapsed = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  elapsed += dt;
+  waterUniforms.uTime.value = elapsed;
+  updateBoat(dt, elapsed);
+  updateWake(dt);
+  for (const i of islands) {
+    if (i.group.userData.charAnim) i.group.userData.charAnim(elapsed);
+  }
+  updateCamera(dt);
+  updateProximity();
+  updateProximityAudio();
+  updateCompass();
+  maybeFadeHint();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

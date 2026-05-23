@@ -1,45 +1,29 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Geist } from "next/font/google";
 import { EazoProvider } from "@eazo/sdk/react";
 import { cn } from "@/utils/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { UserSyncEffect } from "@/components/user-profile/user-sync-effect";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
-
-// Public origin used to resolve relative URLs in OG / Twitter Card tags
-// and `canonical`. Picks up Vercel's auto-injected hostname; on other
-// hosts (or when using a custom domain whose OG should not show the
-// `*.vercel.app` URL), point `metadataBase` at the canonical URL
-// directly instead of relying on this.
 const SITE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
   : undefined;
 
-const SITE_TITLE = "Eazo Developer Home";
+const SITE_TITLE = "海与船 · Sail the Mind";
 const SITE_DESCRIPTION =
-  "Developer onboarding, secure session flow, and backend verification examples.";
+  "A small 3D world you can sail through. Four islands. Twelve people you can meet.";
 
 export const metadata: Metadata = {
   ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
-  icons: {
-    icon: "https://eazo.ai/favicon.ico",
-  },
-  // Social preview cards (Open Graph + Twitter). Most platforms (X,
-  // Facebook, LinkedIn, Slack, Discord, WeChat, iMessage) read these
-  // tags directly. For the preview image, drop a 1200×630 PNG/JPG at
-  // `src/app/opengraph-image.png` — Next.js auto-detects file-based
-  // metadata and overrides `openGraph.images` below at build time.
   openGraph: {
     type: "website",
-    siteName: "Eazo",
+    siteName: "Sail the Mind",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
     url: "/",
-    locale: "en_US",
+    locale: "zh_CN",
   },
   twitter: {
     card: "summary_large_image",
@@ -51,6 +35,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -60,8 +46,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("h-full antialiased", "font-sans", geist.variable)}>
-      <body className="min-h-full flex flex-col">
+    <html lang="zh" className={cn("h-full antialiased")}>
+      <body className="h-full w-full m-0 p-0 overflow-hidden bg-[oklch(35%_0.06_200)]">
         <EazoProvider>
           <UserSyncEffect />
           {children}
