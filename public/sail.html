@@ -368,6 +368,11 @@ scene.add(new THREE.HemisphereLight(0xb8ccdc, 0x4a3a2a, 0.55));
 const waterUniforms = {
   uTime: { value: 0 }, uDeep: { value: P.seaDeep }, uShallow: { value: P.seaShallow },
   uFoam: { value: P.seaFoam }, uSunDir: { value: SUN_DIR }, uHorizonCol: { value: P.skyHorizon },
+  // Bruno-style shallow water: 4 islands as (x, z) — filled after islands are built
+  uIslands: { value: [
+    new THREE.Vector2(0, 0), new THREE.Vector2(0, 0),
+    new THREE.Vector2(0, 0), new THREE.Vector2(0, 0),
+  ]},
 };
 const waterMat = new THREE.ShaderMaterial({
   uniforms: waterUniforms,
@@ -392,19 +397,34 @@ const waterMat = new THREE.ShaderMaterial({
   fragmentShader: `
     uniform vec3 uDeep; uniform vec3 uShallow; uniform vec3 uFoam;
     uniform vec3 uSunDir; uniform vec3 uHorizonCol;
+    uniform vec2 uIslands[4];
     varying vec3 vWorldPos; varying float vWave; varying vec3 vNormal;
     void main() {
       float depthMix = smoothstep(-0.4, 0.55, vWave);
       vec3 base = mix(uDeep, uShallow, depthMix);
       float crest = smoothstep(0.55, 0.92, vWave);
       base = mix(base, uFoam, crest * 0.42);
+      // === Shallow water + shore foam (Bruno-style) ===
+      // Find distance to nearest island center
+      float minIslandDist = 1000.0;
+      for (int i = 0; i < 4; i++) {
+        float d = length(vWorldPos.xz - uIslands[i]);
+        minIslandDist = min(minIslandDist, d);
+      }
+      // Shallow tint: ramps from 22m → 8m (closer = more shallow)
+      float shallowMix = 1.0 - smoothstep(8.0, 22.0, minIslandDist);
+      base = mix(base, vec3(0.62, 0.83, 0.78), shallowMix * 0.55);
+      // Foam ring right at the shore (narrow band around 9.5m)
+      float foamBand = smoothstep(2.2, 0.0, abs(minIslandDist - 9.5));
+      base = mix(base, uFoam, foamBand * 0.7);
+      // Specular highlight from sun
       vec3 viewDir = normalize(cameraPosition - vWorldPos);
       vec3 worldNormal = normalize(vec3(vNormal.x, vNormal.z, -vNormal.y));
       vec3 H = normalize(uSunDir + viewDir);
       float spec = pow(max(0.0, dot(worldNormal, H)), 64.0);
       base += vec3(1.0, 0.88, 0.72) * spec * 0.55;
-      float dist = length(vWorldPos.xz - cameraPosition.xz);
-      float distFog = smoothstep(120.0, 280.0, dist);
+      // Distance fog toward horizon
+      float distFog = smoothstep(120.0, 280.0, length(vWorldPos.xz - cameraPosition.xz));
       base = mix(base, uHorizonCol, distFog * 0.65);
       gl_FragColor = vec4(base, 1.0);
     }`,
@@ -769,12 +789,17 @@ function makeChibi(opts = {}) {
 
 // === ENCOUNTERS ===
 const encounters = [];
-function registerEncounter({ islandPos, localPos, name, line, source, radius = 12 }) {
+function registerEncounter({ islandPos, localPos, name, line, source, radius = 12, character = null, baseYaw = 0 }) {
   encounters.push({
     worldX: islandPos.x + localPos.x,
     worldY: localPos.y,
     worldZ: islandPos.z + localPos.z,
     name, line, source, radius,
+    // Bruno-style additions: keep ref to chibi for look-at + nod, remember resting yaw
+    character,
+    baseYaw,
+    currentYaw: baseYaw,
+    nodTime: -1, // -1 = not nodding, otherwise elapsed in seconds
   });
 }
 
@@ -897,6 +922,7 @@ makeIsland({
       name: '苏轼 · Su Shi (1037–1101)',
       line: '竹杖芒鞋轻胜马。谁怕？一蓑烟雨任平生。',
       source: '《定风波·莫听穿林打叶声》· 1082',
+      character: suShi, baseYaw: Math.PI * 0.8,
     });
 
     // ── 22 (blue glowing blob — NOT chibi proportions, just round)
@@ -943,6 +969,7 @@ makeIsland({
       name: '22 · from Soul',
       line: '原来活着本身，就是 spark。',
       source: 'Pixar · 2020',
+      character: soul22, baseYaw: 0,
     });
 
     // ── Miguel (chibi with messy black hair + brown skin + red hoodie + guitar)
@@ -988,6 +1015,7 @@ makeIsland({
       name: 'Miguel · from Coco',
       line: '记得我 —— 虽然我必须说再见。',
       source: 'Remember Me · Coco · 2017',
+      character: miguel, baseYaw: -0.6,
     });
 
     g.userData.charAnim = (t) => {
@@ -1111,6 +1139,7 @@ makeIsland({
       name: '利威尔 · Levi Ackerman',
       line: '无论选哪条路都会留下后悔。所以选不让自己更后悔的那个。',
       source: '《进击的巨人》· 谏山创',
+      character: levi, baseYaw: -Math.PI * 0.3,
     });
 
     // ── 路明非 Lu Mingfei (chibi, messy hair, glasses, tired)
@@ -1130,6 +1159,7 @@ makeIsland({
       name: '路明非 · Lu Mingfei',
       line: '如果你不试一试，怎么知道自己只是个 loser 呢？',
       source: '《龙族》· 江南',
+      character: luming, baseYaw: Math.PI * 0.4,
     });
 
     // ── 皮皮鲁 (very chibi, flat-top, bright red shirt, cheeky)
@@ -1152,6 +1182,7 @@ makeIsland({
       name: '皮皮鲁',
       line: '大人说不行的，我偏要试。',
       source: '郑渊洁 · 《皮皮鲁传》',
+      character: pipilu, baseYaw: -0.8,
     });
 
     g.userData.charAnim = (t) => {
@@ -1295,6 +1326,7 @@ makeIsland({
       name: '刘擎 · Liu Qing',
       line: '现代人最大的困境，是在祛魅的世界里寻找意义。',
       source: '《西方现代思想四十讲》· 2021',
+      character: liuQing, baseYaw: Math.PI * 0.5,
     });
 
     // ── Tamar Gendler (chibi, short brown hair, glasses, navy blazer)
@@ -1315,6 +1347,7 @@ makeIsland({
       name: 'Tamar Gendler',
       line: "Reason isn't the rider. Reason is the horse, pretending to be the rider.",
       source: 'Yale · Philosophy and the Science of Human Nature',
+      character: gendler, baseYaw: -Math.PI * 0.5,
     });
 
     // ── Yuval Harari (BALD chibi with round glasses + wheat bundle + beige clothing)
@@ -1356,6 +1389,7 @@ makeIsland({
       name: 'Yuval Noah Harari',
       line: "We didn't domesticate wheat. Wheat domesticated us.",
       source: '《Sapiens》· 2011',
+      character: harari, baseYaw: 0,
     });
 
     g.userData.charAnim = (t) => {
@@ -1512,6 +1546,7 @@ makeIsland({
       name: '撑伞的台南人 · The Umbrella Stranger',
       line: '雨下大才有人坐下来慢慢吃。',
       source: '台南 · 神农街',
+      character: tainan, baseYaw: -Math.PI * 0.55,
     });
 
     // ── 椅子乐团 The Chairs (chibi with messy long-ish hair + cream shirt + guitar)
@@ -1556,6 +1591,7 @@ makeIsland({
       name: '椅子乐团 · The Chairs',
       line: '日常的镜头 / 也是日常的光。',
       source: '椅子乐团 · 《日常的镜头》',
+      character: chairs, baseYaw: -0.4,
     });
 
     // ── Claude Monet (chibi with WIDE-BRIM hat + bushy WHITE BEARD + smock + easel)
@@ -1596,6 +1632,7 @@ makeIsland({
       name: 'Claude Monet · 莫奈',
       line: '我想画空气本身——画桥、房子、船所处的那层空气。',
       source: '1893 · 致 Geffroy',
+      character: monet, baseYaw: -0.3,
     });
 
     // RAIN
@@ -1636,7 +1673,8 @@ makeIsland({
         s.scale.setScalar(1 + ph * 0.4);
       }
       chairs.rotation.z = Math.sin(t * 1.6) * 0.02;
-      monet.rotation.y = -0.3 + Math.sin(t * 0.9) * 0.06;
+      // Note: rotation.y is owned by look-at system; idle sway lives on rotation.z
+      monet.rotation.z = Math.sin(t * 0.9) * 0.04;
       for (let i = 0; i < rainCount; i++) {
         rainPositions[i * 3 + 1] -= rainVelocities[i] * 0.016;
         if (rainPositions[i * 3 + 1] < 0) rainPositions[i * 3 + 1] = RAIN_TOP;
@@ -1645,6 +1683,11 @@ makeIsland({
     };
   },
 });
+
+// === Wire island positions into the water shader (shallow + shore foam) ===
+for (let i = 0; i < 4 && i < islands.length; i++) {
+  waterUniforms.uIslands.value[i].set(islands[i].position.x, islands[i].position.z);
+}
 
 // === CONTROLS ===
 const keys = {};
@@ -1702,6 +1745,16 @@ function updateBoat(dt, time) {
     else if (boatState.velocity < 0) boatState.velocity = Math.min(0, boatState.velocity + DRAG * dt);
   }
   boatState.velocity = Math.max(-MAX_SPEED * 0.35, Math.min(MAX_SPEED, boatState.velocity));
+
+  // === Shallow-water drag — boat slows up to ~25% when near an island shore ===
+  let minIslandDist = Infinity;
+  for (const i of islands) {
+    const d = boat.position.distanceTo(i.position);
+    if (d < minIslandDist) minIslandDist = d;
+  }
+  // Drag ramps from 22m → 9m (closer = slower); max 25% velocity loss
+  const shallowFactor = 1.0 - Math.max(0, Math.min(1, 1 - (minIslandDist - 9) / 13)) * 0.25;
+  boatState.velocity *= shallowFactor;
 
   const speedFactor = Math.min(1, Math.abs(boatState.velocity) / 2.5);
   const targetTurn = steer * TURN_RATE_MAX * speedFactor * Math.sign(boatState.velocity || 1);
@@ -1770,8 +1823,11 @@ function startTalk(enc) {
   encSrcEl.textContent = enc.source;
   encEl.classList.add('show');
   hidePrompt();
+  // Bruno-style: character nods to acknowledge being addressed
+  enc.nodTime = 0;
+  // SFX: open chime / paper rustle (graceful if file missing)
+  playSfx('reveal', 0.5);
   // Optional: notify parent window (Eazo wrapper) so it can persist to memory.
-  // No-op when running standalone.
   try {
     if (window.parent !== window) {
       window.parent.postMessage({
@@ -1784,6 +1840,7 @@ function startTalk(enc) {
 function endTalk() {
   talkingTo = null;
   encEl.classList.remove('show');
+  playSfx('conceal', 0.4);
 }
 
 addEventListener('keydown', (e) => {
@@ -1808,11 +1865,19 @@ encEl.addEventListener('click', (e) => {
   if (talkingTo) endTalk();
 });
 
+const ISLAND_ZONE_RADIUS = 32;
 function updateProximity() {
   let nearestIsland = null, nIDist = Infinity;
   for (const i of islands) {
     const d = boat.position.distanceTo(i.position);
     if (d < nIDist) { nearestIsland = i; nIDist = d; }
+    // Bruno-style zone enter/exit — fire arrival chime when first entering each island
+    const wasIn = !!i.userData_inZone;
+    const nowIn = d < ISLAND_ZONE_RADIUS;
+    if (!wasIn && nowIn) {
+      playSfx('arrival', 0.35);
+    }
+    i.userData_inZone = nowIn;
   }
   let nearestEnc = null, nEDist = Infinity;
   for (const enc of encounters) {
@@ -1823,6 +1888,40 @@ function updateProximity() {
   }
   currentNearestEnc = nearestEnc;
   currentNearestEncDist = nEDist;
+
+  // === Bruno-style: each character looks toward you when you're close ===
+  // + nod animation when you press Enter (handled in startTalk by setting nodTime = 0)
+  for (const enc of encounters) {
+    if (!enc.character) continue;
+    const dx = boat.position.x - enc.worldX;
+    const dz = boat.position.z - enc.worldZ;
+    const d = Math.hypot(dx, dz);
+    // Target yaw: face the boat when within ~1.6× encounter radius; otherwise return to rest
+    let targetYaw;
+    if (d < enc.radius * 1.6) {
+      targetYaw = Math.atan2(dx, dz);
+    } else {
+      targetYaw = enc.baseYaw;
+    }
+    // Shortest-arc lerp
+    let delta = targetYaw - enc.currentYaw;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    enc.currentYaw += delta * 0.055;
+    enc.character.rotation.y = enc.currentYaw;
+    // Head nod (only when nodTime is active, set by startTalk)
+    const headNode = enc.character.userData.head || enc.character;
+    if (enc.nodTime >= 0) {
+      enc.nodTime += 0.016;
+      if (enc.nodTime > 1.4) {
+        enc.nodTime = -1;
+        headNode.rotation.x = 0;
+      } else {
+        const phase = enc.nodTime / 1.4;
+        headNode.rotation.x = Math.sin(phase * Math.PI) * 0.32;
+      }
+    }
+  }
 
   const inRange = nearestEnc && nEDist < nearestEnc.radius;
 
@@ -1889,6 +1988,35 @@ const AMBIENT_LAYERS = [
 const PROX_LAYERS = [
   { src: 'audio/rain.mp3', maxVol: 0.42, audio: null, targetName: 'The Rain Market', radius: 24 },
 ];
+// One-shot SFX (Bruno-style: paper rustle on reveal, paper close on conceal, soft chime on island arrival)
+const SFX = {
+  reveal:  { src: 'audio/reveal.mp3',  pool: [], poolSize: 3 },
+  conceal: { src: 'audio/conceal.mp3', pool: [], poolSize: 3 },
+  arrival: { src: 'audio/arrival.mp3', pool: [], poolSize: 2 },
+};
+function loadSfxPools() {
+  for (const key of Object.keys(SFX)) {
+    const def = SFX[key];
+    for (let i = 0; i < def.poolSize; i++) {
+      const a = new Audio(def.src);
+      a.preload = 'auto';
+      a.volume = 0;
+      def.pool.push(a);
+    }
+  }
+}
+let sfxCursor = 0;
+function playSfx(key, volume = 0.5) {
+  const def = SFX[key];
+  if (!def || !userWantsAudio) return;
+  const a = def.pool[sfxCursor % def.poolSize];
+  sfxCursor++;
+  try {
+    a.currentTime = 0;
+    a.volume = volume;
+    a.play().catch(() => undefined);
+  } catch (_) { /* file missing or autoplay blocked */ }
+}
 let musicTracks = [];
 let currentMusic = null;
 let userWantsAudio = true;
@@ -1933,6 +2061,7 @@ async function probeAll() {
   }
 }
 function startAll() {
+  loadSfxPools(); // SFX safe to load after the first user gesture
   if (musicTracks.length > 0) playNextMusic();
   for (const layer of AMBIENT_LAYERS) {
     if (!layer.audio) continue;
