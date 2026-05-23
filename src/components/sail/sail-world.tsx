@@ -94,7 +94,7 @@ export function SailWorld() {
               >
                 Captain
               </span>
-              <span style={{ fontWeight: 500 }}>{user.displayName ?? user.email ?? "—"}</span>
+              <span style={{ fontWeight: 500 }}>{user.name ?? user.email ?? "—"}</span>
             </div>
           ) : (
             <button
