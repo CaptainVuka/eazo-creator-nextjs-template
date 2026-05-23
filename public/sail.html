@@ -1746,15 +1746,19 @@ function updateBoat(dt, time) {
   }
   boatState.velocity = Math.max(-MAX_SPEED * 0.35, Math.min(MAX_SPEED, boatState.velocity));
 
-  // === Shallow-water drag — boat slows up to ~25% when near an island shore ===
+  // === Shallow-water drag — adds extra deceleration near shore (additive, not multiplicative!) ===
   let minIslandDist = Infinity;
   for (const i of islands) {
     const d = boat.position.distanceTo(i.position);
     if (d < minIslandDist) minIslandDist = d;
   }
-  // Drag ramps from 22m → 9m (closer = slower); max 25% velocity loss
-  const shallowFactor = 1.0 - Math.max(0, Math.min(1, 1 - (minIslandDist - 9) / 13)) * 0.25;
-  boatState.velocity *= shallowFactor;
+  const closeness = Math.max(0, Math.min(1, 1 - (minIslandDist - 9) / 13)); // 0 far → 1 at shore
+  const extraDrag = closeness * 2.0; // max 2 units/sec extra drag (ACCEL is 3.2 — you can still push)
+  if (boatState.velocity > 0) {
+    boatState.velocity = Math.max(0, boatState.velocity - extraDrag * dt);
+  } else if (boatState.velocity < 0) {
+    boatState.velocity = Math.min(0, boatState.velocity + extraDrag * dt);
+  }
 
   const speedFactor = Math.min(1, Math.abs(boatState.velocity) / 2.5);
   const targetTurn = steer * TURN_RATE_MAX * speedFactor * Math.sign(boatState.velocity || 1);
